@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the BloFin demo bot 2 minutes after every 4h UTC candle close
+
+[Timer]
+OnCalendar=*-*-* 00,04,08,12,16,20:02:00 UTC
+Persistent=true
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

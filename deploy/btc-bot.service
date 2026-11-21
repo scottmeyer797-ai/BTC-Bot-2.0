@@ -1,0 +1,12 @@
+[Unit]
+Description=BloFin demo breakout bot (one run)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=btcbot
+WorkingDirectory=/opt/btc-bot
+EnvironmentFile=/etc/btc-bot.env
+ExecStart=/opt/btc-bot/deploy/run_and_push.sh
+TimeoutStartSec=900
