@@ -1,0 +1,96 @@
+name: bot
+
+# Runs one bot cycle against BloFin DEMO and commits state + logs to the
+# `bot-state` branch. The schedule is OFF until it is explicitly approved:
+# uncomment the two schedule lines below to enable it.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: print signals and sizing, send no orders, save no state"
+        type: boolean
+        default: true
+      report:
+        description: "Also rebuild reports/weekly.md"
+        type: boolean
+        default: false
+  # schedule:
+  #   - cron: "2 0,4,8,12,16,20 * * *"   # 2 minutes past every 4h UTC boundary
+
+concurrency:
+  group: blofin-bot          # never two runs at once; queued runs wait
+  cancel-in-progress: false
+
+permissions:
+  contents: write            # push to the bot-state branch
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MODE: ${{ vars.MODE || 'challenge' }}
+      ACCOUNT_SIZE: ${{ vars.ACCOUNT_SIZE || '100000' }}
+      BOT_ENABLED: ${{ vars.BOT_ENABLED || 'true' }}
+      BLOFIN_API_KEY: ${{ secrets.BLOFIN_API_KEY }}
+      BLOFIN_API_SECRET: ${{ secrets.BLOFIN_API_SECRET }}
+      BLOFIN_PASSPHRASE: ${{ secrets.BLOFIN_PASSPHRASE }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      REPO_ROOT: ${{ github.workspace }}
+      STATE_DIR: ${{ github.workspace }}/bot-state
+      CACHE_DIR: ${{ github.workspace }}/.candle-cache
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the bot-state branch (create it on first run)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$url" bot-state >/dev/null; then
+            git clone --quiet --depth 50 --branch bot-state --single-branch "$url" bot-state
+          else
+            mkdir bot-state && cd bot-state && git init --quiet -b bot-state && git remote add origin "$url"
+            printf '# bot-state\n\nState, logs and reports written by the bot. Do not edit while it is running.\n' > README.md
+          fi
+
+      - uses: actions/cache@v4
+        with:
+          path: .candle-cache
+          key: candles-${{ github.run_id }}
+          restore-keys: candles-
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Run bot
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            python -m bot.run --dry-run
+          else
+            python -m bot.run
+          fi
+
+      - name: Weekly report (Mondays 00:xx UTC, or on request)
+        if: always()
+        run: |
+          if [ "$(date -u +%u%H)" = "100" ] || [ "${{ inputs.report }}" = "true" ]; then
+            python scripts/weekly_report.py || echo "report skipped"
+          fi
+
+      - name: Commit state and logs to bot-state
+        if: always()
+        run: |
+          cd bot-state
+          git config user.name "blofin-demo-bot"
+          git config user.email "blofin-demo-bot@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit --quiet -m "bot run $(date -u +%Y-%m-%dT%H:%MZ) (${{ github.event_name }})"
+          for i in 1 2 3 4; do git push --quiet origin bot-state && exit 0; sleep $((i * 5)); done
+          exit 1
