@@ -1,0 +1,33 @@
+{
+  "account_size": 100000.0,
+  "closed_trades": [],
+  "consecutive_losses": 0,
+  "created_at": "2026-11-21T03:23:01Z",
+  "day_start_equity": {
+    "2026-11-21": 100000.0
+  },
+  "equity_history": [
+    {
+      "bar_close": "2026-11-21T00:00:00Z",
+      "day_start": 100000.0,
+      "dry_run": false,
+      "equity": 100000.0,
+      "open_risk": 0.0,
+      "open_trades": 0,
+      "realized": 0.0,
+      "time": "2026-11-21T03:23:01Z",
+      "unrealized": 0
+    }
+  ],
+  "failed": false,
+  "failed_at": null,
+  "failed_reason": null,
+  "last_daily_summary": "2026-11-21",
+  "last_entry_close_ts": {},
+  "last_processed_bar_close_ts": 1795219200000,
+  "mode": "challenge",
+  "open_trades": [],
+  "realized_pnl": 0.0,
+  "unmanaged_positions": [],
+  "version": 1
+}
