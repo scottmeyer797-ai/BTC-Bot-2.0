@@ -221,7 +221,7 @@ class Bot:
         equity, unreal = self.equity_now()
         snap = self.snapshot()
         self.state["equity_history"].append({
-            "time": utcnow_iso(), "bar_close": ms_to_iso(latest_close), "equity": round(equity, 2),
+            "time": ms_to_iso(self.now_ms), "bar_close": ms_to_iso(latest_close), "equity": round(equity, 2),
             "realized": round(self.state["realized_pnl"], 2), "unrealized": round(unreal, 2),
             "day_start": day_start, "open_trades": len(self.state["open_trades"]),
             "open_risk": round(snap.open_initial_risk, 2), "dry_run": self.dry_run,

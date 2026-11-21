@@ -260,3 +260,16 @@ def test_missed_bar_signal_is_logged_as_stale(env):
     s = signals(cfg)
     assert s[-1]["action"] == "skipped" and s[-1]["reason"].startswith("stale")
     assert "market_entry" not in [c[0] for c in ex.calls]
+
+
+def test_weekly_report_from_real_run(env):
+    from bot.report import build_report, read_signals
+    cfg, w, ex, bot, _ = entered_world(env)
+    ex.trigger_stop("SOL-USDT")
+    w.advance(1, {"SOL-USDT": 109.0})
+    run(cfg, ex, w)
+    md = build_report(state(cfg), read_signals(cfg.log_dir))
+    assert "| All time | 1 | 0.0% | -1.0" in md
+    assert "Versus backtest expectations" in md and "30%–35%" in md
+    assert "xychart-beta" in md and "Daily-loss peak" in md
+    assert "Trades per week" in md
