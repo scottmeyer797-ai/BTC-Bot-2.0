@@ -106,6 +106,10 @@ python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
 - **Schedule**: the `schedule:` lines in `.github/workflows/bot.yml` are commented out. Uncomment them to run every
   4 hours. GitHub may start scheduled runs several minutes late; that's fine because the bot always evaluates the
   last *closed* bar. If a whole bar is missed, its signals are logged as `stale` and not traded.
+- **Self-test of orders and TP/SL** (Actions → bot → Run workflow → tick "Self-test"): opens the minimum
+  BTC-USDT size (0.0001 BTC) on demo with stop and target attached, checks BloFin lists them, deletes them and
+  checks the bot re-places them, then closes the position. The result is saved to `selftest/last.md` on the
+  `bot-state` branch. It never touches the bot's state or stats, and refuses to run if BTC has a position.
 - **90-day replay** of the signal logic on BloFin demo candles (public data, no keys):
   ```bash
   .venv/bin/python scripts/replay_90d.py --days 90 --mode challenge

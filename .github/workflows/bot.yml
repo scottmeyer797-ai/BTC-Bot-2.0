@@ -14,6 +14,10 @@ on:
         description: "Also rebuild reports/weekly.md"
         type: boolean
         default: false
+      selftest:
+        description: "Self-test only: open/close the minimum BTC size to check orders and TP/SL (ignores Dry run)"
+        type: boolean
+        default: false
   # schedule:
   #   - cron: "2 0,4,8,12,16,20 * * *"   # 2 minutes past every 4h UTC boundary
 
@@ -70,7 +74,9 @@ jobs:
 
       - name: Run bot
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "${{ inputs.selftest }}" = "true" ]; then
+            python -m bot.selftest
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
             python -m bot.run --dry-run
           else
             python -m bot.run
