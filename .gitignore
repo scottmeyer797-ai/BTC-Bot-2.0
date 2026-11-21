@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/cache/
+state/
+*.env
+.env*
+# runtime outputs live on the bot-state branch, not main
+logs/*.csv
+reports/*.md
