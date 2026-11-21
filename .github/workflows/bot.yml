@@ -18,8 +18,8 @@ on:
         description: "Self-test only: open/close the minimum BTC size to check orders and TP/SL (ignores Dry run)"
         type: boolean
         default: false
-  # schedule:
-  #   - cron: "2 0,4,8,12,16,20 * * *"   # 2 minutes past every 4h UTC boundary
+  schedule:
+    - cron: "2 0,4,8,12,16,20 * * *"   # 2 minutes past every 4h UTC boundary
 
 concurrency:
   group: blofin-bot          # never two runs at once; queued runs wait
