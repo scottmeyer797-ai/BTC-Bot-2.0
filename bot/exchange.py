@@ -82,7 +82,8 @@ def _f(x, default=None):
 class BlofinDemo:
     def __init__(self, cfg: Config, *, private: bool = True):
         assert_demo_url(cfg.base_url)
-        params = {"enableRateLimit": True, "options": {"defaultType": "swap"}}
+        # requests_trust_env: honour HTTPS_PROXY / CA bundle env vars (no-op when none are set)
+        params = {"enableRateLimit": True, "requests_trust_env": True, "options": {"defaultType": "swap"}}
         if private and cfg.has_credentials:
             params.update(apiKey=cfg.api_key, secret=cfg.api_secret, password=cfg.passphrase)
         self.ex = ccxt.blofin(params)
