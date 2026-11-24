@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BREAKOUT//BOT — BloFin demo</title>
+<style>
+:root{
+  --bg:#05020d;--bg2:#0b0618;--panel:rgba(18,8,38,.78);--line:#2a1550;
+  --pink:#ff2bd6;--cyan:#00f0ff;--yellow:#f6ff3d;--green:#39ff88;--red:#ff3b5c;--violet:#9d4dff;
+  --text:#e8e6ff;--dim:#8b84b8;--mono:"JetBrains Mono","Fira Code","Cascadia Code",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px}
+body{min-height:100vh;
+  background:
+    radial-gradient(1200px 600px at 10% -10%,rgba(255,43,214,.16),transparent 60%),
+    radial-gradient(900px 500px at 110% 10%,rgba(0,240,255,.13),transparent 60%),
+    linear-gradient(rgba(157,77,255,.07) 1px,transparent 1px) 0 0/100% 32px,
+    linear-gradient(90deg,rgba(157,77,255,.07) 1px,transparent 1px) 0 0/32px 100%,
+    var(--bg);}
+body:after{content:"";pointer-events:none;position:fixed;inset:0;z-index:50;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px);mix-blend-mode:multiply}
+a{color:var(--cyan)}
+.wrap{max-width:1400px;margin:0 auto;padding:18px 16px 60px}
+header{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;margin-bottom:16px}
+.logo{font-size:28px;font-weight:800;letter-spacing:.08em;position:relative;color:#fff;
+  text-shadow:0 0 8px var(--pink),0 0 22px rgba(255,43,214,.6)}
+.logo span{color:var(--cyan);text-shadow:0 0 8px var(--cyan),0 0 22px rgba(0,240,255,.6)}
+.logo:before,.logo:after{content:attr(data-text);position:absolute;left:0;top:0;opacity:.55;pointer-events:none}
+.logo:before{color:var(--cyan);transform:translate(2px,0);clip-path:inset(0 0 60% 0);animation:gl 3.2s infinite steps(2)}
+.logo:after{color:var(--pink);transform:translate(-2px,0);clip-path:inset(55% 0 0 0);animation:gl 2.7s infinite steps(2) reverse}
+@keyframes gl{0%,92%{transform:translate(0,0)}93%{transform:translate(3px,-1px)}96%{transform:translate(-3px,1px)}100%{transform:translate(0,0)}}
+.sub{color:var(--dim);font-size:11px;letter-spacing:.2em;text-transform:uppercase}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{border:1px solid var(--line);background:rgba(11,6,24,.85);padding:5px 9px;font-size:11px;letter-spacing:.08em;
+  text-transform:uppercase;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.chip.ok{border-color:var(--green);color:var(--green);box-shadow:0 0 10px rgba(57,255,136,.25) inset}
+.chip.warn{border-color:var(--yellow);color:var(--yellow)}
+.chip.bad{border-color:var(--red);color:var(--red);box-shadow:0 0 14px rgba(255,59,92,.4) inset}
+.chip.info{border-color:var(--cyan);color:var(--cyan)}
+.chip.pink{border-color:var(--pink);color:var(--pink)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:6px;
+  box-shadow:0 0 8px var(--green);animation:pulse 1.4s infinite}
+.dot.off{background:var(--red);box-shadow:0 0 8px var(--red)}
+@keyframes pulse{50%{opacity:.25}}
+.banner{border:1px solid var(--yellow);color:var(--yellow);padding:8px 12px;margin-bottom:14px;display:none;
+  background:repeating-linear-gradient(45deg,rgba(246,255,61,.08) 0 12px,transparent 12px 24px)}
+.banner.bad{border-color:var(--red);color:var(--red);background:repeating-linear-gradient(45deg,rgba(255,59,92,.1) 0 12px,transparent 12px 24px)}
+.grid{display:grid;gap:12px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.panel{background:var(--panel);border:1px solid var(--line);position:relative;padding:14px;backdrop-filter:blur(3px);
+  clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px))}
+.panel:before{content:"";position:absolute;left:0;top:0;width:40%;height:2px;background:linear-gradient(90deg,var(--pink),transparent)}
+.panel h2{margin:0 0 10px;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--cyan);font-weight:700}
+.kpi .label{color:var(--dim);font-size:10px;letter-spacing:.18em;text-transform:uppercase}
+.kpi .val{font-size:24px;font-weight:800;margin-top:6px;white-space:nowrap}
+.kpi .note{color:var(--dim);font-size:11px;margin-top:4px;min-height:14px}
+.pos{color:var(--green);text-shadow:0 0 10px rgba(57,255,136,.35)}
+.neg{color:var(--red);text-shadow:0 0 10px rgba(255,59,92,.35)}
+.neu{color:var(--text)}
+.bar{height:7px;background:#1a0f33;margin-top:8px;position:relative;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--cyan),var(--pink));box-shadow:0 0 10px var(--pink)}
+.bar i.hot{background:linear-gradient(90deg,var(--yellow),var(--red))}
+.two{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);margin-top:12px}
+@media (max-width:900px){.two{grid-template-columns:1fr}}
+#chart{width:100%;height:260px;position:relative}
+#chart svg{width:100%;height:100%;display:block}
+.tip{position:absolute;pointer-events:none;background:#0b0618;border:1px solid var(--cyan);padding:6px 8px;font-size:11px;
+  display:none;white-space:nowrap;box-shadow:0 0 12px rgba(0,240,255,.35);z-index:5}
+.empty{color:var(--dim);padding:18px 4px;text-align:center;letter-spacing:.1em}
+.cards{display:grid;gap:10px}
+.card{border:1px solid var(--line);padding:10px;background:rgba(5,2,13,.6)}
+.card .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sym{font-size:16px;font-weight:800;letter-spacing:.06em}
+.side{font-size:10px;padding:2px 6px;border:1px solid;margin-left:6px}
+.side.long{color:var(--green);border-color:var(--green)}
+.side.short{color:var(--red);border-color:var(--red)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px 12px;margin-top:8px;font-size:11px}
+.kv div span{display:block;color:var(--dim);font-size:9px;letter-spacing:.16em;text-transform:uppercase}
+.track{position:relative;height:10px;margin:12px 0 4px;background:linear-gradient(90deg,rgba(255,59,92,.35),rgba(26,15,51,1) 30%,rgba(26,15,51,1) 70%,rgba(57,255,136,.35))}
+.track b{position:absolute;top:-4px;width:2px;height:18px;background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
+.track u{position:absolute;top:-3px;width:1px;height:16px;background:var(--cyan);opacity:.8}
+.track .lbl{position:absolute;top:13px;font-size:9px;color:var(--dim);transform:translateX(-50%);white-space:nowrap}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tag{font-size:9px;letter-spacing:.12em;padding:2px 6px;border:1px solid var(--violet);color:var(--violet);text-transform:uppercase}
+.tag.on{border-color:var(--yellow);color:var(--yellow)}
+.tabs{display:flex;gap:4px;margin:18px 0 0;flex-wrap:wrap}
+.tab{background:transparent;color:var(--dim);border:1px solid var(--line);border-bottom:none;padding:8px 14px;cursor:pointer;
+  font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;font-size:11px}
+.tab.active{color:var(--pink);border-color:var(--pink);box-shadow:0 -6px 16px -8px var(--pink) inset;background:rgba(255,43,214,.06)}
+.tabpanel{display:none;border-top:1px solid var(--pink)}
+.tabpanel.active{display:block}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}
+input,select,button.btn{background:#0b0618;color:var(--text);border:1px solid var(--line);padding:7px 9px;font-family:var(--mono);font-size:12px}
+input:focus,select:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 8px rgba(0,240,255,.35)}
+button.btn{cursor:pointer;color:var(--cyan);border-color:var(--cyan);letter-spacing:.1em;text-transform:uppercase;font-size:11px}
+button.btn:hover{background:rgba(0,240,255,.1)}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{color:var(--dim);font-size:10px;letter-spacing:.14em;text-transform:uppercase;text-align:left;padding:8px;border-bottom:1px solid var(--line);
+  cursor:pointer;white-space:nowrap;user-select:none}
+th.sorted{color:var(--cyan)}
+td{padding:7px 8px;border-bottom:1px solid rgba(42,21,80,.6);white-space:nowrap}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:rgba(0,240,255,.06)}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px;color:var(--dim)}
+.totals{color:var(--dim);font-size:11px;margin:0 0 8px}
+.totals b{color:var(--text)}
+.modal{position:fixed;inset:0;background:rgba(3,1,8,.82);display:none;z-index:40;align-items:flex-start;justify-content:center;padding:4vh 12px;overflow:auto}
+.modal.show{display:flex}
+.modal .panel{max-width:960px;width:100%}
+.close{float:right;cursor:pointer;color:var(--pink);font-size:12px;letter-spacing:.2em}
+.timeline{border-left:2px solid var(--pink);margin:8px 0 8px 6px;padding-left:12px}
+.timeline div{margin:0 0 8px;position:relative}
+.timeline div:before{content:"";position:absolute;left:-18px;top:4px;width:10px;height:10px;background:var(--bg);border:2px solid var(--cyan)}
+.timeline small{color:var(--dim)}
+pre{white-space:pre-wrap;word-break:break-word;background:#07030f;border:1px solid var(--line);padding:10px;font-size:11px;max-height:420px;overflow:auto}
+.flash{animation:flash 1.2s}
+@keyframes flash{0%{box-shadow:0 0 0 0 var(--cyan)}30%{box-shadow:0 0 30px 4px var(--cyan)}100%{box-shadow:none}}
+footer{color:var(--dim);font-size:10px;letter-spacing:.12em;margin-top:24px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="logo" data-text="BREAKOUT//BOT">BREAKOUT<span>//</span>BOT</div>
+      <div class="sub">BloFin demo · swing-level breakout · forward test</div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </header>
+  <div class="banner" id="banner"></div>
+
+  <section class="grid kpis" id="kpis"></section>
+
+  <section class="grid two">
+    <div class="panel" id="equity-panel">
+      <h2>Equity curve</h2>
+      <div id="chart"><div class="tip" id="tip"></div></div>
+    </div>
+    <div class="panel" id="open-panel">
+      <h2>Open positions <span id="opencount" style="color:var(--dim)"></span></h2>
+      <div class="cards" id="open"></div>
+    </div>
+  </section>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="history">Trade history</button>
+    <button class="tab" data-tab="signals">Signals</button>
+    <button class="tab" data-tab="events">Event log</button>
+    <button class="tab" data-tab="system">System</button>
+  </nav>
+
+  <section class="panel tabpanel active" id="tab-history">
+    <div class="filters">
+      <input id="h-q" placeholder="search id, symbol, reason…" size="24">
+      <select id="h-sym"><option value="">all symbols</option></select>
+      <select id="h-side"><option value="">long + short</option><option>long</option><option>short</option></select>
+      <select id="h-res"><option value="">all results</option><option value="win">winners</option><option value="loss">losers</option></select>
+      <select id="h-reason"><option value="">all exit reasons</option></select>
+      <input id="h-from" type="date" title="closed from"><input id="h-to" type="date" title="closed until">
+      <button class="btn" id="h-csv">Export CSV</button>
+    </div>
+    <div class="totals" id="h-totals"></div>
+    <div class="tablewrap"><table id="h-table"><thead></thead><tbody></tbody></table></div>
+    <div class="pager" id="h-pager"></div>
+  </section>
+
+  <section class="panel tabpanel" id="tab-signals">
+    <div class="filters">
+      <input id="s-q" placeholder="search reason, symbol…" size="24">
+      <select id="s-sym"><option value="">all symbols</option></select>
+      <select id="s-act"><option value="">taken + skipped</option><option>taken</option><option>skipped</option><option value="dry_run">dry run</option></select>
+      <button class="btn" id="s-csv">Export CSV</button>
+    </div>
+    <div class="totals" id="s-totals"></div>
+    <div class="tablewrap"><table id="s-table"><thead></thead><tbody></tbody></table></div>
+    <div class="pager" id="s-pager"></div>
+  </section>
+
+  <section class="panel tabpanel" id="tab-events">
+    <div class="filters">
+      <input id="e-q" placeholder="search details, trade id…" size="24">
+      <select id="e-type"><option value="">all events</option></select>
+      <button class="btn" id="e-csv">Export CSV</button>
+    </div>
+    <div class="totals" id="e-totals"></div>
+    <div class="tablewrap"><table id="e-table"><thead></thead><tbody></tbody></table></div>
+    <div class="pager" id="e-pager"></div>
+  </section>
+
+  <section class="panel tabpanel" id="tab-system">
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+      <div><h2>Configuration</h2><div class="tablewrap"><table id="cfg"><tbody></tbody></table></div></div>
+      <div><h2>Feeds</h2><div class="tablewrap"><table id="feeds"><tbody></tbody></table></div></div>
+    </div>
+    <h2 style="margin-top:16px">Last exchange self-test</h2>
+    <pre id="selftest"></pre>
+  </section>
+
+  <footer id="footer"></footer>
+</div>
+
+<div class="modal" id="modal"><div class="panel" id="modal-body"></div></div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- helpers (data is always inserted as text)
+const $ = (s) => document.querySelector(s);
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v === undefined || v === null) continue;
+    if (k === "class") e.className = v; else if (k === "style") e.style.cssText = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false)
+    e.appendChild(typeof k === "string" || typeof k === "number" ? document.createTextNode(String(k)) : k);
+  return e;
+}
+const num = (x) => (x === null || x === undefined || x === "" || isNaN(+x)) ? null : +x;
+const fmt = (x, d = 2) => x === null || x === undefined || isNaN(x) ? "—" : (+x).toLocaleString("en-US", {minimumFractionDigits: d, maximumFractionDigits: d});
+const money = (x) => x === null || x === undefined ? "—" : (x < 0 ? "-$" : "$") + fmt(Math.abs(x));
+const sgn = (x, d = 2) => x === null || x === undefined ? "—" : (x > 0 ? "+" : "") + fmt(x, d);
+const pct = (x, d = 2) => x === null || x === undefined ? "—" : (x > 0 ? "+" : "") + fmt(x * 100, d) + "%";
+const cls = (x) => x > 0 ? "pos" : x < 0 ? "neg" : "neu";
+const px = (x) => { if (x === null || x === undefined) return "—"; const a = Math.abs(x);
+  return (+x).toLocaleString("en-US", {maximumSignificantDigits: a >= 1000 ? 8 : 6}); };
+const iso = (ms) => ms ? new Date(+ms).toISOString().replace("T", " ").slice(0, 16) : "—";
+const ago = (t) => { if (!t) return "never"; const s = (Date.now() - new Date(t).getTime()) / 1000;
+  if (s < 0) return "just now";
+  if (s < 90) return Math.round(s) + "s ago"; if (s < 5400) return Math.round(s / 60) + " min ago";
+  if (s < 172800) return (s / 3600).toFixed(1) + " h ago"; return (s / 86400).toFixed(1) + " d ago"; };
+const safeUrl = (u) => /^https?:\/\//.test(u || "") ? u : null;
+
+// ---------------------------------------------------------------- state
+let DATA = null, PRICES = {}, PRICE_AT = null, PRICE_OK = false, lastGen = null;
+const DATA_URL = "data.json";
+
+async function loadData() {
+  try {
+    const r = await fetch(DATA_URL + "?t=" + Date.now(), {cache: "no-store"});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    const changed = lastGen && d.generated_at !== lastGen;
+    DATA = d; lastGen = d.generated_at;
+    renderAll();
+    if (changed) { $("#kpis").classList.remove("flash"); void $("#kpis").offsetWidth; $("#kpis").classList.add("flash"); }
+  } catch (e) {
+    showBanner("Can't load bot data (" + e.message + "). Retrying every minute.", true);
+  }
+}
+async function loadPrices() {
+  if (!DATA || DATA.preview) return;  // preview data uses simulated prices: never mix in real ones
+  const base = safeUrl(DATA.exchange && DATA.exchange.rest);
+  if (!base || !/demo-trading-openapi\.blofin\.com/.test(base)) return;
+  try {
+    const r = await fetch(base + "/api/v1/market/tickers", {cache: "no-store"});
+    const j = await r.json();
+    const m = {};
+    for (const t of (j.data || [])) { const v = num(t.last); if (v) m[t.instId] = v; }
+    PRICES = m; PRICE_AT = Date.now(); PRICE_OK = true;
+  } catch (e) { PRICE_OK = false; }
+  renderLive();
+}
+
+// ---------------------------------------------------------------- live maths
+function liveTrade(t) {
+  const p = PRICES[t.inst_id];
+  const dir = t.side === "long" ? 1 : -1;
+  const qty = (+t.contracts) * (+t.contract_value);
+  if (!p) return {price: null, upnl: null, r: null};
+  const upnl = dir * (p - t.entry_price) * qty - (t.entry_fee || 0);
+  const r = t.risk_amount ? (upnl + (t.realized_added || 0)) / t.risk_amount : null;
+  return {price: p, upnl, r};
+}
+function liveEquity() {
+  const d = DATA; if (!d) return null;
+  let unreal = 0, ok = true;
+  for (const t of d.open_trades) { const l = liveTrade(t); if (l.upnl === null) ok = false; else unreal += l.upnl; }
+  if (!ok || !PRICE_OK) return {equity: d.summary.equity, live: false, unreal: null};
+  return {equity: d.bot.account_size + d.summary.realized_pnl + unreal, live: true, unreal};
+}
+
+// ---------------------------------------------------------------- header + KPIs
+function showBanner(text, bad) { const b = $("#banner"); b.textContent = text; b.className = "banner" + (bad ? " bad" : ""); b.style.display = text ? "block" : "none"; }
+function chip(text, kind, withDot, dotOff) { return el("span", {class: "chip " + (kind || "")}, withDot ? el("span", {class: "dot" + (dotOff ? " off" : "")}) : null, text); }
+
+function renderHeader() {
+  const d = DATA, b = d.bot, s = d.summary;
+  const lastRun = s.last_run ? (Date.now() - new Date(s.last_run).getTime()) / 3600e3 : null;
+  const stale = lastRun === null || lastRun > 5;
+  const chips = $("#chips"); chips.replaceChildren(...[
+    b.failed ? chip("challenge failed", "bad", true, true)
+      : chip(stale ? "bot stale" : "bot online", stale ? "warn" : "ok", true, stale),
+    chip(PRICE_OK ? "price feed live" : "price feed offline", PRICE_OK ? "info" : "warn", true, !PRICE_OK),
+    chip(b.mode + " mode", "pink"), chip("exit " + b.exit_protocol, "info"),
+    chip(b.long_only ? "long only" : "long + short"), chip("vol: " + b.volume_source),
+    b.enabled ? null : chip("kill switch on", "bad"),
+    el("span", {class: "chip", id: "clock"}, new Date().toISOString().slice(11, 19) + " UTC")].filter(Boolean));
+  const msgs = [];
+  if (d.preview) msgs.push("PREVIEW — simulated data from the test harness, not real trades.");
+  if (b.failed) msgs.push("CHALLENGE FAILED: " + (b.failed_reason || "") + " (" + (b.failed_at || "") + ")");
+  if (!b.failed && stale && s.last_run) msgs.push("No bot run for " + ago(s.last_run).replace(" ago", "") + ". Check the GitHub Actions workflow.");
+  if (!s.last_run) msgs.push("Waiting for the bot's first live run.");
+  if ((d.unmanaged_positions || []).length) msgs.push("Positions on the exchange that the bot did not open: " + d.unmanaged_positions.map(u => u.inst_id).join(", "));
+  showBanner(msgs.join("  ·  "), b.failed);
+}
+
+function kpi(id, label, value, valueClass, note, barFrac, hot) {
+  return el("div", {class: "panel kpi", id},
+    el("div", {class: "label"}, label), el("div", {class: "val " + (valueClass || "")}, value),
+    el("div", {class: "note"}, note || ""),
+    barFrac === undefined ? null : el("div", {class: "bar"}, el("i", {class: hot ? "hot" : "", style: "width:" + Math.max(0, Math.min(100, barFrac * 100)) + "%"})));
+}
+
+function renderKpis() {
+  const d = DATA, b = d.bot, s = d.summary, live = liveEquity();
+  const eq = live.equity, ret = eq / b.account_size - 1;
+  const today = new Date().toISOString().slice(0, 10);
+  const dayStart = (s.day_start_equity || {})[today] || null;
+  const dayPnl = dayStart ? eq - dayStart : null;
+  const dayLoss = dayStart ? Math.max(0, dayStart - eq) / dayStart : 0;
+  const dd = Math.max(0, b.account_size - eq) / b.account_size;
+  const risk = b.risk_pct * (b.consecutive_losses >= 3 ? 0.5 : 1);
+  $("#kpis").replaceChildren(
+    kpi("k-eq", live.live ? "Equity · live" : "Equity · last run", money(eq), cls(ret), pct(ret) + " vs " + money(b.account_size)),
+    kpi("k-day", "Today's P&L", dayPnl === null ? "—" : (dayPnl >= 0 ? "+" : "") + money(dayPnl), cls(dayPnl),
+        "daily loss " + fmt(dayLoss * 100) + "% of " + fmt(b.daily_loss_limit * 100, 0) + "% limit", dayLoss / b.daily_loss_limit, dayLoss / b.daily_loss_limit > .6),
+    kpi("k-dd", "Drawdown from start", fmt(dd * 100) + "%", dd > 0 ? "neg" : "neu",
+        "limit " + fmt(b.max_drawdown_limit * 100, 0) + "% · peak-to-trough " + fmt((s.max_drawdown || 0) * 100) + "%", dd / b.max_drawdown_limit, dd / b.max_drawdown_limit > .6),
+    kpi("k-win", "Win rate", s.win_rate === null ? "—" : fmt(s.win_rate * 100, 1) + "%", "neu", s.closed_trades + " closed · " + s.open_trades + " open"),
+    kpi("k-r", "Average R / total R", s.avg_r === null ? "—" : sgn(s.avg_r) + "R", cls(s.avg_r), "total " + sgn(s.total_r) + "R · best " + sgn(s.best_r) + "R"),
+    kpi("k-risk", "Risk per trade", fmt(risk * 100) + "%", b.consecutive_losses >= 3 ? "neg" : "neu",
+        "losing streak " + b.consecutive_losses + (b.consecutive_losses >= 3 ? " · halved" : "")),
+    kpi("k-run", "Last bot run", ago(s.last_run), "neu", s.last_bar_close ? "bar " + s.last_bar_close.replace("T", " ").slice(0, 16) : "")
+  );
+}
+
+// ---------------------------------------------------------------- equity chart
+function renderChart() {
+  const box = $("#chart"), tip = $("#tip");
+  box.querySelectorAll("svg").forEach(n => n.remove());
+  const pts = DATA.equity.map(p => ({t: new Date(p.t).getTime(), v: p.equity}));
+  const live = liveEquity();
+  if (live.live && pts.length) pts.push({t: Date.now(), v: live.equity, live: true});
+  if (pts.length < 2) { if (!box.querySelector(".empty")) box.appendChild(el("div", {class: "empty"}, "No equity history yet")); return; }
+  box.querySelectorAll(".empty").forEach(n => n.remove());
+  const W = box.clientWidth || 600, H = box.clientHeight || 260, L = 64, R = 12, T = 10, B = 26;
+  const xs = pts.map(p => p.t), ys = pts.map(p => p.v).concat([DATA.bot.account_size]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), pad = (y1 - y0) * .08 || 50;
+  const X = t => L + (t - x0) / ((x1 - x0) || 1) * (W - L - R), Y = v => T + (1 - (v - (y0 - pad)) / ((y1 - y0 + 2 * pad) || 1)) * (H - T - B);
+  const NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const mk = (tag, a) => { const n = document.createElementNS(NS, tag); for (const k in a) n.setAttribute(k, a[k]); svg.appendChild(n); return n; };
+  const defs = mk("defs", {});
+  const g = document.createElementNS(NS, "linearGradient"); g.setAttribute("id", "fill"); g.setAttribute("x1", 0); g.setAttribute("y1", 0); g.setAttribute("x2", 0); g.setAttribute("y2", 1);
+  [["0%", "rgba(255,43,214,.45)"], ["100%", "rgba(255,43,214,0)"]].forEach(([o, c]) => { const s = document.createElementNS(NS, "stop"); s.setAttribute("offset", o); s.setAttribute("stop-color", c); g.appendChild(s); });
+  defs.appendChild(g);
+  for (let i = 0; i <= 4; i++) { const v = y0 - pad + i * (y1 - y0 + 2 * pad) / 4, y = Y(v);
+    mk("line", {x1: L, x2: W - R, y1: y, y2: y, stroke: "rgba(157,77,255,.18)"});
+    const t = mk("text", {x: L - 6, y: y + 3, "text-anchor": "end", fill: "#8b84b8", "font-size": 10}); t.textContent = "$" + Math.round(v).toLocaleString(); }
+  const base = Y(DATA.bot.account_size);
+  mk("line", {x1: L, x2: W - R, y1: base, y2: base, stroke: "rgba(0,240,255,.45)", "stroke-dasharray": "4 4"});
+  const ddY = Y(DATA.bot.account_size * (1 - DATA.bot.max_drawdown_limit));
+  if (ddY < H - B) mk("line", {x1: L, x2: W - R, y1: ddY, y2: ddY, stroke: "rgba(255,59,92,.6)", "stroke-dasharray": "2 5"});
+  const line = pts.map((p, i) => (i ? "L" : "M") + X(p.t).toFixed(1) + " " + Y(p.v).toFixed(1)).join(" ");
+  mk("path", {d: line + ` L${X(pts[pts.length - 1].t)} ${H - B} L${X(pts[0].t)} ${H - B} Z`, fill: "url(#fill)"});
+  mk("path", {d: line, fill: "none", stroke: "#ff2bd6", "stroke-width": 2, style: "filter:drop-shadow(0 0 6px #ff2bd6)"});
+  [x0, (x0 + x1) / 2, x1].forEach((t, i) => { const tx = mk("text", {x: X(t), y: H - 8, "text-anchor": ["start", "middle", "end"][i], fill: "#8b84b8", "font-size": 10}); tx.textContent = new Date(t).toISOString().slice(0, 10); });
+  const cur = mk("circle", {r: 4, fill: "#00f0ff", style: "display:none;filter:drop-shadow(0 0 6px #00f0ff)"});
+  svg.addEventListener("mousemove", (ev) => {
+    const r = svg.getBoundingClientRect(), mx = (ev.clientX - r.left) / r.width * W;
+    let best = pts[0]; for (const p of pts) if (Math.abs(X(p.t) - mx) < Math.abs(X(best.t) - mx)) best = p;
+    cur.setAttribute("cx", X(best.t)); cur.setAttribute("cy", Y(best.v)); cur.style.display = "block";
+    tip.textContent = (best.live ? "LIVE " : "") + iso(best.t) + "  " + money(best.v) + "  " + pct(best.v / DATA.bot.account_size - 1);
+    tip.style.display = "block";
+    const tx = (X(best.t) / W) * r.width, ty = (Y(best.v) / H) * r.height;
+    tip.style.left = Math.min(r.width - tip.offsetWidth - 4, Math.max(0, tx + 10)) + "px"; tip.style.top = Math.max(0, ty - 34) + "px";
+  });
+  svg.addEventListener("mouseleave", () => { tip.style.display = "none"; cur.style.display = "none"; });
+  box.insertBefore(svg, tip);
+}
+
+// ---------------------------------------------------------------- open positions
+function renderOpen() {
+  const box = $("#open"), ts = DATA.open_trades;
+  $("#opencount").textContent = "(" + ts.length + ")";
+  if (!ts.length) { box.replaceChildren(el("div", {class: "empty"}, "Flat — no open positions")); return; }
+  box.replaceChildren(...ts.map(t => {
+    const l = liveTrade(t), dir = t.side === "long" ? 1 : -1;
+    const tps = (t.partials || []);
+    const lastTp = tps.length ? tps[tps.length - 1].price : t.target;
+    const lo = Math.min(t.stop0 ?? t.stop, t.stop, l.price ?? t.entry_price, t.entry_price), hi = Math.max(lastTp, l.price ?? t.entry_price, t.best ?? 0);
+    const pos = (v) => ((v - lo) / ((hi - lo) || 1) * 100).toFixed(2) + "%";
+    const track = el("div", {class: "track"},
+      el("u", {style: "left:" + pos(t.stop)}), el("span", {class: "lbl", style: "left:" + pos(t.stop)}, "SL " + px(t.stop)),
+      el("u", {style: "left:" + pos(t.entry_price)}),
+      ...tps.map(p => el("u", {style: "left:" + pos(p.price) + ";opacity:" + (p.done ? .35 : 1)})),
+      el("span", {class: "lbl", style: "left:" + pos(lastTp)}, "TP " + px(lastTp)),
+      l.price ? el("b", {style: "left:" + pos(l.price), title: "live price"}) : null);
+    return el("div", {class: "card"},
+      el("div", {class: "top"},
+        el("div", null, el("span", {class: "sym"}, t.symbol), el("span", {class: "side " + t.side}, t.side.toUpperCase())),
+        el("div", {class: "sym " + cls(l.upnl)}, l.upnl === null ? "—" : (l.upnl >= 0 ? "+" : "") + money(l.upnl))),
+      track,
+      el("div", {class: "kv", style: "margin-top:16px"},
+        el("div", null, el("span", null, "entry"), px(t.entry_price)),
+        el("div", null, el("span", null, "live"), l.price ? px(l.price) : "—"),
+        el("div", null, el("span", null, "R now"), l.r === null ? "—" : sgn(l.r) + "R"),
+        el("div", null, el("span", null, "stop"), px(t.stop)),
+        el("div", null, el("span", null, "size"), t.contracts + " / " + t.init_contracts),
+        el("div", null, el("span", null, "risk"), money(t.risk_amount)),
+        el("div", null, el("span", null, "held"), (t.bars_held || 0) + " / " + (t.max_bars || "—") + " bars"),
+        el("div", null, el("span", null, "opened"), (t.entry_ts_iso || "").replace("T", " ").slice(0, 16))),
+      el("div", {class: "tags"},
+        el("span", {class: "tag on"}, t.protocol || "B0"),
+        ...tps.map(p => el("span", {class: "tag" + (p.done ? " on" : "")}, (p.done ? "✓ " : "") + Math.round(p.frac * 100) + "% @" + p.r + "R")),
+        el("span", {class: "tag" + (t.be_done ? " on" : "")}, t.be_done ? "✓ break-even" : "BE @2R"),
+        el("span", {class: "tag" + (t.trail_on ? " on" : "")}, t.trail_on ? "✓ trailing" : "trail off")));
+  }));
+}
+
+// ---------------------------------------------------------------- generic table with filters / sort / paging
+function makeTable(cfg) {
+  const st = {sort: cfg.sort, dir: cfg.dir || -1, page: 0};
+  const table = $(cfg.table), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
+  function rows() {
+    let r = cfg.rows().filter(cfg.filter);
+    const col = cfg.cols.find(c => c.key === st.sort);
+    if (col) r = r.slice().sort((a, b) => { const va = col.sortv ? col.sortv(a) : a[col.key], vb = col.sortv ? col.sortv(b) : b[col.key];
+      return (va > vb ? 1 : va < vb ? -1 : 0) * st.dir; });
+    return r;
+  }
+  function render() {
+    const r = rows(), per = 25, pages = Math.max(1, Math.ceil(r.length / per));
+    st.page = Math.min(st.page, pages - 1);
+    thead.replaceChildren(el("tr", null, ...cfg.cols.map(c => el("th", {class: c.key === st.sort ? "sorted" : "",
+      onclick: () => { st.dir = st.sort === c.key ? -st.dir : -1; st.sort = c.key; render(); }},
+      c.label + (c.key === st.sort ? (st.dir > 0 ? " ▲" : " ▼") : "")))));
+    const slice = r.slice(st.page * per, st.page * per + per);
+    tbody.replaceChildren(...(slice.length ? slice.map(row => el("tr", {onclick: cfg.onrow ? () => cfg.onrow(row) : null},
+      ...cfg.cols.map(c => { const v = c.fmt ? c.fmt(row) : row[c.key]; const k = c.cls ? c.cls(row) : "";
+        return el("td", {class: (c.num ? "num " : "") + k}, v === null || v === undefined || v === "" ? "—" : String(v)); })))
+      : [el("tr", null, el("td", {colspan: cfg.cols.length, class: "empty"}, cfg.empty || "Nothing here yet"))]));
+    $(cfg.pager).replaceChildren(
+      el("span", null, r.length + " rows · page " + (st.page + 1) + " / " + pages),
+      el("button", {class: "btn", onclick: () => { st.page = 0; render(); }}, "« first"),
+      el("button", {class: "btn", onclick: () => { st.page = Math.max(0, st.page - 1); render(); }}, "‹ prev"),
+      el("button", {class: "btn", onclick: () => { st.page = Math.min(pages - 1, st.page + 1); render(); }}, "next ›"),
+      el("button", {class: "btn", onclick: () => { st.page = pages - 1; render(); }}, "last »"));
+    if (cfg.totals) cfg.totals(r);
+  }
+  for (const id of cfg.inputs) $(id).addEventListener("input", () => { st.page = 0; render(); });
+  $(cfg.csv).addEventListener("click", () => downloadCsv(cfg.name, cfg.cols, rows()));
+  return {render};
+}
+function downloadCsv(name, cols, rows) {
+  const esc = (v) => { const s = v === null || v === undefined ? "" : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const text = [cols.map(c => esc(c.label)).join(",")].concat(rows.map(r => cols.map(c => esc(c.fmt ? c.fmt(r) : r[c.key])).join(","))).join("\n");
+  const a = el("a", {href: URL.createObjectURL(new Blob([text], {type: "text/csv"})), download: name + "-" + new Date().toISOString().slice(0, 10) + ".csv"});
+  document.body.appendChild(a); a.click(); a.remove();
+}
+const match = (row, q, keys) => !q || keys.some(k => String(row[k] ?? "").toLowerCase().includes(q));
+const fillSelect = (id, values, first) => { const s = $(id), cur = s.value;
+  s.replaceChildren(el("option", {value: ""}, first), ...[...new Set(values)].filter(Boolean).sort().map(v => el("option", {value: v}, v))); s.value = cur; };
+
+// ---------------------------------------------------------------- trade history
+const H = makeTable({
+  name: "trades", table: "#h-table", pager: "#h-pager", csv: "#h-csv", sort: "exit_ts",
+  inputs: ["#h-q", "#h-sym", "#h-side", "#h-res", "#h-reason", "#h-from", "#h-to"],
+  rows: () => DATA ? DATA.closed_trades : [],
+  filter: (t) => { const q = $("#h-q").value.trim().toLowerCase(), from = $("#h-from").value, to = $("#h-to").value, d = (t.exit_ts_iso || "").slice(0, 10);
+    return match(t, q, ["id", "symbol", "exit_reason", "protocol", "side"]) && (!$("#h-sym").value || t.symbol === $("#h-sym").value)
+      && (!$("#h-side").value || t.side === $("#h-side").value) && (!$("#h-reason").value || t.exit_reason === $("#h-reason").value)
+      && (!$("#h-res").value || ($("#h-res").value === "win" ? t.net_pnl > 0 : t.net_pnl <= 0))
+      && (!from || d >= from) && (!to || d <= to); },
+  cols: [
+    {key: "exit_ts", label: "closed", fmt: t => iso(t.exit_ts)},
+    {key: "symbol", label: "symbol"}, {key: "side", label: "side", cls: t => t.side === "long" ? "pos" : "neg"},
+    {key: "entry_price", label: "entry", num: 1, fmt: t => px(t.entry_price)},
+    {key: "exit_price", label: "avg exit", num: 1, fmt: t => px(t.exit_price)},
+    {key: "r_multiple", label: "R", num: 1, fmt: t => sgn(t.r_multiple) + "R", cls: t => cls(t.r_multiple)},
+    {key: "net_pnl", label: "net P&L", num: 1, fmt: t => money(t.net_pnl), cls: t => cls(t.net_pnl)},
+    {key: "fees", label: "fees", num: 1, fmt: t => money(t.fees)},
+    {key: "funding", label: "funding", num: 1, fmt: t => money(t.funding)},
+    {key: "exit_reason", label: "exit"}, {key: "protocol", label: "exit plan"},
+    {key: "entry_ts", label: "opened", fmt: t => iso(t.entry_ts)},
+    {key: "hold", label: "held", num: 1, sortv: t => (t.exit_ts || 0) - (t.entry_ts || 0), fmt: t => t.exit_ts && t.entry_ts ? ((t.exit_ts - t.entry_ts) / 864e5).toFixed(1) + "d" : "—"}],
+  empty: "No closed trades yet",
+  totals: (r) => { const n = r.length, w = r.filter(t => t.net_pnl > 0).length, R = r.reduce((a, t) => a + (t.r_multiple || 0), 0), P = r.reduce((a, t) => a + (t.net_pnl || 0), 0);
+    $("#h-totals").replaceChildren("Filtered: ", el("b", null, n), " trades · win rate ", el("b", null, n ? fmt(w / n * 100, 1) + "%" : "—"),
+      " · total ", el("b", {class: cls(R)}, sgn(R) + "R"), " · net ", el("b", {class: cls(P)}, money(P))); },
+  onrow: (t) => showTrade(t)
+});
+
+function showTrade(t) {
+  // keep the order events were logged in (the log is append-only); sort only by time
+  const ev = (DATA.events || []).map((e, i) => [e, i]).filter(([e]) => e.trade_id === t.id)
+    .sort((a, b) => (a[0].time > b[0].time ? 1 : a[0].time < b[0].time ? -1 : a[1] - b[1])).map(([e]) => e);
+  const sig = (DATA.signals || []).filter(s => s.symbol === t.symbol && s.bar_close && t.entry_bar_close_ts_iso && s.bar_close === t.entry_bar_close_ts_iso);
+  const kv = (label, v, c) => el("div", null, el("span", null, label), el("b", {class: c || ""}, v === null || v === undefined ? "—" : String(v)));
+  $("#modal-body").replaceChildren(
+    el("span", {class: "close", onclick: hideModal}, "✕ CLOSE"),
+    el("h2", null, t.symbol + " " + t.side.toUpperCase() + " · " + t.id),
+    el("div", {class: "kv"},
+      kv("result", sgn(t.r_multiple) + "R", cls(t.r_multiple)), kv("net P&L", money(t.net_pnl), cls(t.net_pnl)),
+      kv("gross", money(t.gross_pnl)), kv("fees", money(t.fees)), kv("funding", money(t.funding)),
+      kv("exit reason", t.exit_reason), kv("exit plan", t.protocol), kv("risk", money(t.risk_amount) + " (" + fmt((t.risk_pct || 0) * 100) + "%)"),
+      kv("level broken", px(t.level)), kv("signal close", px(t.ref_price)), kv("entry fill", px(t.entry_price)), kv("initial stop", px(t.stop0)),
+      kv("final stop", px(t.stop)), kv("1R", px(t.r_unit)), kv("avg exit", px(t.exit_price)), kv("contracts", t.init_contracts),
+      kv("leverage", t.leverage ? t.leverage + "x" : null), kv("volume z", t.vol_z ? (+t.vol_z).toFixed(2) : null), kv("volume source", t.volume_source),
+      kv("BTC trend", t.btc_trend), kv("opened", iso(t.entry_ts)), kv("closed", iso(t.exit_ts)),
+      kv("break-even", t.be_done ? "yes" : "no"), kv("trailing", t.trail_on ? "yes" : "no"), kv("exit price estimated", t.exit_estimated ? "YES" : "no")),
+    el("h2", {style: "margin-top:16px"}, "Take-profit plan"),
+    el("div", {class: "tags"}, ...(t.partials || []).map(p => el("span", {class: "tag" + (p.done ? " on" : "")},
+      (p.done ? "✓ " : "✗ ") + Math.round(p.frac * 100) + "% @ " + p.r + "R = " + px(p.price) + " (" + p.contracts + ")"))),
+    el("h2", {style: "margin-top:16px"}, "Timeline"),
+    ev.length ? el("div", {class: "timeline"}, ...ev.map(e => el("div", null, el("b", null, e.event.toUpperCase()), " ",
+      el("small", null, (e.time || "").replace("T", " ").replace("Z", " UTC")), el("br"), e.details || "",
+      e.price ? "  price " + px(num(e.price)) : "", e.net_pnl ? "  net " + money(num(e.net_pnl)) : "")))
+      : el("div", {class: "empty"}, "No logged events for this trade"),
+    el("h2", {style: "margin-top:16px"}, "Exit fills"),
+    el("div", {class: "tablewrap"}, el("table", null, el("tbody", null, ...(t.close_fills || []).map(f =>
+      el("tr", null, el("td", null, iso(f.ts)), el("td", {class: "num"}, px(f.price)), el("td", {class: "num"}, String(f.size)), el("td", null, f.estimated ? "estimated" : "fill")))))),
+    sig.length ? el("div", null, el("h2", {style: "margin-top:16px"}, "Signal"), el("pre", null, JSON.stringify(sig[0], null, 2))) : null,
+    el("h2", {style: "margin-top:16px"}, "Raw record"),
+    el("button", {class: "btn", onclick: () => navigator.clipboard && navigator.clipboard.writeText(JSON.stringify(t, null, 2))}, "copy JSON"),
+    el("pre", null, JSON.stringify(t, null, 2)));
+  $("#modal").classList.add("show");
+}
+function hideModal() { $("#modal").classList.remove("show"); }
+$("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") hideModal(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideModal(); });
+
+// ---------------------------------------------------------------- signals
+const S = makeTable({
+  name: "signals", table: "#s-table", pager: "#s-pager", csv: "#s-csv", sort: "bar_close",
+  inputs: ["#s-q", "#s-sym", "#s-act"],
+  rows: () => DATA ? DATA.signals : [],
+  filter: (s) => match(s, $("#s-q").value.trim().toLowerCase(), ["reason", "symbol", "note", "side", "action"])
+    && (!$("#s-sym").value || s.symbol === $("#s-sym").value) && (!$("#s-act").value || s.action === $("#s-act").value),
+  cols: [
+    {key: "bar_close", label: "bar close", fmt: s => (s.bar_close || "").replace("T", " ").slice(0, 16)},
+    {key: "symbol", label: "symbol"}, {key: "side", label: "side", cls: s => s.side === "long" ? "pos" : "neg"},
+    {key: "action", label: "action", cls: s => s.action === "taken" ? "pos" : ""},
+    {key: "reason", label: "reason"},
+    {key: "vol_z", label: "vol z", num: 1, sortv: s => num(s.vol_z), fmt: s => num(s.vol_z) === null ? "—" : num(s.vol_z).toFixed(2)},
+    {key: "stop_pct", label: "stop %", num: 1, sortv: s => num(s.stop_pct), fmt: s => num(s.stop_pct) === null ? "—" : (num(s.stop_pct) * 100).toFixed(2) + "%"},
+    {key: "risk_amount", label: "risk $", num: 1, sortv: s => num(s.risk_amount), fmt: s => num(s.risk_amount) === null ? "—" : money(num(s.risk_amount))},
+    {key: "note", label: "note"}],
+  empty: "No signals logged yet",
+  totals: (r) => $("#s-totals").replaceChildren("Filtered: ", el("b", null, r.length), " signals · taken ", el("b", null, r.filter(s => s.action === "taken").length)),
+  onrow: (s) => { $("#modal-body").replaceChildren(el("span", {class: "close", onclick: hideModal}, "✕ CLOSE"), el("h2", null, "Signal"), el("pre", null, JSON.stringify(s, null, 2))); $("#modal").classList.add("show"); }
+});
+
+// ---------------------------------------------------------------- events
+const E = makeTable({
+  name: "events", table: "#e-table", pager: "#e-pager", csv: "#e-csv", sort: "time",
+  inputs: ["#e-q", "#e-type"],
+  rows: () => DATA ? DATA.events : [],
+  filter: (e) => match(e, $("#e-q").value.trim().toLowerCase(), ["details", "trade_id", "symbol", "event"]) && (!$("#e-type").value || e.event === $("#e-type").value),
+  cols: [
+    {key: "time", label: "time", fmt: e => (e.time || "").replace("T", " ").replace("Z", "")},
+    {key: "event", label: "event", cls: e => /fail|mismatch|replaced/.test(e.event) ? "neg" : e.event === "exit" ? "pos" : ""},
+    {key: "symbol", label: "symbol"}, {key: "trade_id", label: "trade"},
+    {key: "price", label: "price", num: 1, sortv: e => num(e.price), fmt: e => num(e.price) === null ? "—" : px(num(e.price))},
+    {key: "net_pnl", label: "net", num: 1, sortv: e => num(e.net_pnl), fmt: e => num(e.net_pnl) === null ? "—" : money(num(e.net_pnl)), cls: e => cls(num(e.net_pnl))},
+    {key: "details", label: "details"}],
+  empty: "No events logged yet",
+  totals: (r) => $("#e-totals").replaceChildren("Filtered: ", el("b", null, r.length), " events"),
+  onrow: (e) => { const t = (DATA.closed_trades || []).concat(DATA.open_trades || []).find(x => x.id === e.trade_id && x.exit_ts); if (t) showTrade(t); }
+});
+
+// ---------------------------------------------------------------- system tab
+function renderSystem() {
+  const b = DATA.bot;
+  const rows = [["mode", b.mode], ["account size", money(b.account_size)], ["risk per trade", fmt(b.risk_pct * 100) + "%"],
+    ["target", b.target_r + "R"], ["max open risk", fmt(b.max_open_risk * 100) + "%"], ["exit plan", b.exit_protocol + " — " + b.exit_description],
+    ["direction", b.long_only ? "long only" : "long + short"], ["volume source", b.volume_source],
+    ["daily loss limit", fmt(b.daily_loss_limit * 100) + "% (new trades blocked at " + fmt(b.daily_block * 100, 1) + "%)"],
+    ["max drawdown", fmt(b.max_drawdown_limit * 100) + "% (blocked at " + fmt(b.drawdown_block * 100, 0) + "%)"],
+    ["trading enabled", b.enabled ? "yes" : "NO — kill switch"], ["challenge failed", b.failed ? "YES — " + b.failed_reason : "no"]];
+  $("#cfg tbody").replaceChildren(...rows.map(([k, v]) => el("tr", null, el("td", {style: "color:var(--dim)"}, k), el("td", null, v))));
+  $("#feeds tbody").replaceChildren(
+    el("tr", null, el("td", {style: "color:var(--dim)"}, "bot data generated"), el("td", null, (DATA.generated_at || "") + " (" + ago(DATA.generated_at) + ")")),
+    el("tr", null, el("td", {style: "color:var(--dim)"}, "dashboard refresh"), el("td", null, "data every 60 s · prices every 10 s")),
+    el("tr", null, el("td", {style: "color:var(--dim)"}, "price feed"), el("td", null, PRICE_OK ? "BloFin demo tickers, " + ago(new Date(PRICE_AT).toISOString()) : "offline")),
+    el("tr", null, el("td", {style: "color:var(--dim)"}, "exchange"), el("td", null, DATA.exchange.name + " · " + DATA.exchange.rest)));
+  $("#selftest").textContent = DATA.selftest || "No self-test recorded yet.";
+}
+
+// ---------------------------------------------------------------- render loop
+function renderLive() { if (!DATA) return; renderHeader(); renderKpis(); renderOpen(); renderChart(); renderSystem(); }
+function renderAll() {
+  if (!DATA) return;
+  fillSelect("#h-sym", DATA.closed_trades.map(t => t.symbol), "all symbols");
+  fillSelect("#h-reason", DATA.closed_trades.map(t => t.exit_reason), "all exit reasons");
+  fillSelect("#s-sym", DATA.signals.map(s => s.symbol), "all symbols");
+  fillSelect("#e-type", DATA.events.map(e => e.event), "all events");
+  renderLive(); H.render(); S.render(); E.render();
+  $("#footer").textContent = "BloFin DEMO only · data " + (DATA.generated_at || "") + " · " + DATA.closed_trades.length + " closed trades · " + (DATA.signals || []).length + " signals · " + (DATA.events || []).length + " events";
+}
+document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === b));
+  document.querySelectorAll(".tabpanel").forEach(p => p.classList.toggle("active", p.id === "tab-" + b.dataset.tab));
+}));
+window.addEventListener("resize", () => DATA && renderChart());
+setInterval(() => { const c = $("#clock"); if (c) c.textContent = new Date().toISOString().slice(11, 19) + " UTC"; }, 1000);
+loadData().then(loadPrices);
+setInterval(loadData, 60000);
+setInterval(loadPrices, 10000);
+</script>
+</body>
+</html>
