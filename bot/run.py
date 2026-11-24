@@ -15,13 +15,14 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from .alerts import Alerter
-from .config import BAR_MS, QUOTE, TIME_EXIT_BARS, UNIVERSE, Config, load_config
+from .binance_volume import apply_volume, cached_fetch
+from .config import BAR_MS, HISTORY_BARS, QUOTE, TIME_EXIT_BARS, UNIVERSE, Config, load_config
 from .data import load_candles
 from .exchange import BlofinDemo
 from .indicators import DAY_MS, add_indicators, btc_trend_at, btc_trend_by_day, daily_candles, day_floor, \
     levels_at, swing_levels
 from .journal import Journal
-from .reconcile import Reconciler, describe_trade, direction, entry_side, trade_qty
+from .reconcile import Reconciler, describe_trade, direction, entry_side, trade_qty, upgrade_trade
 from .risk import Snapshot, TradeExposure, breach_reason, effective_risk_pct, guard_block_reason, \
     open_risk_cap_reason, worst_equity_path
 from .signals import detect_signal, signal_filter_reason
@@ -61,9 +62,13 @@ def date_str(ms: int) -> str:
 
 
 class Bot:
-    def __init__(self, cfg: Config, client, *, dry_run: bool, now_ms: int | None = None, alerter=None, journal=None):
+    def __init__(self, cfg: Config, client, *, dry_run: bool, now_ms: int | None = None, alerter=None, journal=None,
+                 manage_only: bool = False, volume_fetcher=None):
         self.cfg = cfg
         self.dry_run = dry_run
+        self.manage_only = manage_only
+        self.volume_fetcher = volume_fetcher
+        self.vol_src: dict[str, str] = {}
         self.client = DryRunClient(client) if dry_run else client
         self.now_ms = now_ms or int(time.time() * 1000)
         self.journal = journal or Journal(cfg.log_dir, dry_run=dry_run)
@@ -93,6 +98,13 @@ class Bot:
         unreal = sum(self.unrealized(t, self.prices.get(t["inst_id"])) for t in self.state["open_trades"])
         return self.cfg.account_size + self.state["realized_pnl"] + unreal, unreal
 
+    @staticmethod
+    def risk_at_stop(t: dict) -> float:
+        """Money still at stake: entry to the CURRENT stop (0 once the stop is at break-even or better)."""
+        if t["status"] != "open":
+            return t.get("risk_amount", 0.0)
+        return max(0.0, direction(t["side"]) * (t["entry_price"] - t["stop"])) * trade_qty(t)
+
     def equity_at(self, t_ms: int) -> float:
         """Reconstructed simulated equity at a past time, from trade records and 4h closes."""
         eq = self.cfg.account_size
@@ -100,10 +112,11 @@ class Bot:
             if t["exit_ts"] <= t_ms:
                 eq += t["net_pnl"]
             elif t.get("entry_ts", 0) <= t_ms:
-                eq += self.unrealized({**t, "status": "open"}, self.price_at(t["symbol"], t_ms))
+                was_open = {**t, "status": "open", "contracts": t.get("contracts_at_close", t.get("init_contracts", "0"))}
+                eq += self.unrealized(was_open, self.price_at(t["symbol"], t_ms)) + t.get("partial_net", 0.0)
         for t in self.state["open_trades"]:
             if t["status"] == "open" and t.get("entry_ts", 0) <= t_ms:
-                eq += self.unrealized(t, self.price_at(t["symbol"], t_ms))
+                eq += self.unrealized(t, self.price_at(t["symbol"], t_ms)) + t.get("realized_added", 0.0)
         return eq
 
     def day_start_equity(self, day_ms: int) -> float:
@@ -117,7 +130,7 @@ class Bot:
         equity, _ = self.equity_now()
         init = rem = 0.0
         for t in self.state["open_trades"]:
-            init += t.get("risk_amount", 0.0)
+            init += self.risk_at_stop(t)
             px = self.prices.get(t["inst_id"], t.get("entry_price"))
             rem += max(0.0, direction(t["side"]) * (px - t["stop"])) * trade_qty(t)
         return Snapshot(self.cfg.account_size, equity, self.day_start_equity(day_floor(self.now_ms)), init, rem)
@@ -126,7 +139,8 @@ class Bot:
     def run(self) -> int:
         cfg = self.cfg
         self.say(f"run at {ms_to_iso(self.now_ms)} mode={cfg.mode.name} account={cfg.account_size:,.0f} "
-                 f"dry_run={self.dry_run} credentials={'yes' if self.private else 'no'}")
+                 f"dry_run={self.dry_run} manage_only={self.manage_only} credentials={'yes' if self.private else 'no'} "
+                 f"exit={cfg.exit_protocol.name} long_only={cfg.long_only} volume={cfg.volume_source}")
         if not self.private and not self.dry_run:
             raise RuntimeError("BLOFIN_API_KEY / BLOFIN_API_SECRET / BLOFIN_PASSPHRASE are required for a live-demo run")
         if self.state["mode"] != cfg.mode.name:
@@ -146,9 +160,25 @@ class Bot:
         self.frames, self.ind, self.levels = {}, {}, {}
         for sym, inst_id in self.universe.items():
             df = load_candles(self.client, inst_id, cfg.cache_dir, now_ms=self.now_ms)
+            self.vol_src[sym] = "blofin"
+            if cfg.volume_source == "binance":
+                try:
+                    vol = cached_fetch(inst_id, cfg.cache_dir, HISTORY_BARS, self.now_ms, fetcher=self.volume_fetcher)
+                    df2, ok, cov = apply_volume(df, vol)
+                except Exception as e:  # noqa: BLE001 - fall back to BloFin volume, never stop the run
+                    ok, cov = False, 0.0
+                    log.warning("Binance volume for %s failed: %s", inst_id, e)
+                if ok:
+                    df, self.vol_src[sym] = df2, "binance"
+                else:
+                    self.vol_src[sym] = f"blofin (Binance fallback, coverage {cov:.0%})"
             self.frames[sym] = df
             self.ind[sym] = add_indicators(df)
             self.levels[sym] = swing_levels(daily_candles(df, int(df["ts"].iloc[-1]) + BAR_MS))
+        fallback = [s for s, v in self.vol_src.items() if v.startswith("blofin (")]
+        if fallback:
+            self.say(f"WARNING volume from BloFin instead of Binance for: {', '.join(fallback)}")
+            self.alerter.send(f"⚠️ Binance volume unavailable for {', '.join(fallback)}; using BloFin volume this run")
         latest_close = max(int(df["ts"].iloc[-1]) + BAR_MS for df in self.frames.values())
         self.latest_close = latest_close
         self.say(f"latest closed 4h bar: {ms_to_iso(latest_close)}")
@@ -190,12 +220,23 @@ class Bot:
         if self.state["failed"]:
             self.flatten("challenge failed")
         else:
-            # 4. time exits
+            # 4. stop management (break-even, trailing runner) and time exits
             for t in [t for t in self.state["open_trades"] if t["status"] == "open"]:
+                upgrade_trade(t)
+                px = self.prices.get(t["inst_id"])
+                res = rec.manage_stop(t, self.ind[t["symbol"]], px) if t["symbol"] in self.ind else None
+                if res == "hit":
+                    self.say(f"{t['symbol']}: price already beyond the moved stop; closing at market")
+                    rec.close_trade(t, "stop moved past price between runs", px)
+                    continue
+                if res:
+                    self.say(res)
+                    self.alerter.send("🔒 " + res)
                 t["bars_held"] = int((latest_close - t["entry_bar_close_ts"]) // BAR_MS)
-                if t["bars_held"] >= TIME_EXIT_BARS:
+                limit = t.get("max_bars", TIME_EXIT_BARS)
+                if t["bars_held"] >= limit:
                     self.say(f"time exit: {t['symbol']} held {t['bars_held']} bars")
-                    rec.close_trade(t, "time exit (60 bars)", self.prices.get(t["inst_id"]))
+                    rec.close_trade(t, f"time exit ({limit} bars)", px)
             # 5. TP/SL on exchange
             if self.private:
                 for t in [t for t in self.state["open_trades"] if t["status"] == "open"]:
@@ -214,7 +255,10 @@ class Bot:
                 self.say(f"ERROR account modes: {e}")
                 self.alerter.send(f"⚠️ {e}")
                 self.state["_entries_blocked"] = str(e)
-        self.scan_signals(balance)
+        if self.manage_only:
+            self.say("manage-only run: open trades managed, no new signals evaluated")
+        else:
+            self.scan_signals(balance)
         self.state.pop("_entries_blocked", None)
 
         # 7. bookkeeping
@@ -226,7 +270,7 @@ class Bot:
             "day_start": day_start, "open_trades": len(self.state["open_trades"]),
             "open_risk": round(snap.open_initial_risk, 2), "dry_run": self.dry_run,
         })
-        if not self.dry_run:
+        if not self.dry_run and not self.manage_only:
             self.state["last_processed_bar_close_ts"] = latest_close
         self.daily_summary(equity, day_start)
         for t in self.state["open_trades"]:
@@ -249,11 +293,16 @@ class Bot:
             if t["exit_ts"] <= start:
                 base += t["net_pnl"]
             else:
+                # partials banked before the final close count as realized; the rest was open until exit
+                partial = t.get("partial_net", 0.0)
+                base += partial
+                qty = float(t.get("contracts_at_close", t.get("init_contracts", t["contracts"]))) * float(
+                    t["contract_value"])
                 exposures.append(TradeExposure(t["symbol"], t["side"], t.get("entry_ts", 0), t["exit_ts"],
-                                               t["entry_price"], t["stop"], trade_qty(t), t["net_pnl"]))
+                                               t["entry_price"], t["stop"], qty, t["net_pnl"] - partial))
         for t in self.state["open_trades"]:
             if t["status"] == "open":
-                base -= t.get("entry_fee", 0.0)
+                base += t.get("realized_added", 0.0) - t.get("entry_fee", 0.0)
                 exposures.append(TradeExposure(t["symbol"], t["side"], t.get("entry_ts", 0), None,
                                                t["entry_price"], t["stop"], trade_qty(t)))
         if not exposures:
@@ -314,7 +363,8 @@ class Bot:
                             mode=self.cfg.mode.name, action=action, reason=reason, risk_pct=risk_pct,
                             risk_amount=size.risk_amount if size else None,
                             contracts=str(size.contracts) if size else None,
-                            leverage=size.leverage if size else None, note=note)
+                            leverage=size.leverage if size else None,
+                            note="; ".join(x for x in (note, f"volume: {self.vol_src.get(sig.symbol, '?')}") if x))
         line = (f"SIGNAL {sig.symbol} {sig.side} level {sig.level:.6g} close {sig.close:.6g} stop {sig.stop:.6g} "
                 f"({sig.stop_pct:.2%}) target {target:.6g} z {sig.vol_z:.2f} rank {sig.vol_rank:.2f} "
                 f"trend {trend:+d} -> {action}{': ' + reason if reason else ''}")
@@ -327,6 +377,8 @@ class Bot:
     def consider(self, sig, inst_id: str, trend: int, balance: dict | None) -> None:
         cfg, st = self.cfg, self.state
         reason = signal_filter_reason(sig, cfg.mode, trend, st["last_entry_close_ts"].get(sig.symbol))
+        if reason is None and cfg.long_only and sig.side == "short":
+            reason = "long-only mode (shorts disabled)"
         if reason is None and any(t["inst_id"] == inst_id for t in st["open_trades"]):
             reason = "position already open on this symbol"
         if reason is None and any(u["inst_id"] == inst_id for u in st.get("unmanaged_positions", [])):
@@ -368,7 +420,10 @@ class Bot:
             "stop": sig.stop, "target": target, "contracts": str(size.contracts),
             "contract_value": str(inst.contract_value), "risk_amount": size.risk_amount, "risk_pct": risk_pct,
             "leverage": size.leverage, "bars_held": 0, "entry_fee": 0.0, "vol_z": sig.vol_z,
-            "vol_rank": sig.vol_rank, "btc_trend": trend,
+            "vol_rank": sig.vol_rank, "btc_trend": trend, "volume_source": self.vol_src.get(sig.symbol),
+            "protocol": cfg.exit_protocol.name, "stop0": sig.stop, "r_unit": abs(sig.close - sig.stop),
+            "target_r": cfg.mode.target_r, "max_bars": cfg.exit_protocol.max_bars,
+            "init_contracts": str(size.contracts),
         }
         self.log_signal(sig, trend, "dry_run" if self.dry_run else "taken", None, size, risk_pct, size.note)
         if self.dry_run:
@@ -382,8 +437,10 @@ class Bot:
         st["open_trades"].append(trade)
         save_state(cfg.state_path, st)  # persist intent before sending the order (crash safety)
         try:
+            # the stop is attached to the entry; the target too when the whole position exits there
+            attach_tp = None if cfg.exit_protocol.runner() or len(cfg.exit_protocol.partials) > 1 else target
             trade["order_id"] = self.client.market_entry(inst, entry_side(sig.side), size.contracts, sig.stop,
-                                                         target, client_oid)
+                                                         attach_tp, client_oid)
         except Exception as e:  # noqa: BLE001
             self.say(f"ERROR entry order {sig.symbol}: {e}")
         od = None
@@ -411,9 +468,11 @@ class Bot:
         res = self.rec.verify_tpsl(trade)
         save_state(cfg.state_path, st)
         self.say(f"ENTERED {describe_trade(trade)} · TP/SL check: {res}")
+        plan = ", ".join(f"{p['contracts']} @ {p['r']:g}R ({p['price']:.6g})" for p in trade["partials"])
         self.alerter.send(f"📈 ENTRY {sig.symbol} {sig.side} {trade['contracts']} contracts @ "
-                          f"{trade['entry_price']:.6g} · SL {sig.stop:.6g} · TP {target:.6g} · risk "
-                          f"{trade['risk_amount']:,.2f} USDT ({risk_pct:.2%}) · {size.leverage}x · TP/SL: {res}")
+                          f"{trade['entry_price']:.6g} · SL {sig.stop:.6g} · take-profits {plan} · exit "
+                          f"{cfg.exit_protocol.name} · risk {trade['risk_amount']:,.2f} USDT ({risk_pct:.2%}) · "
+                          f"{size.leverage}x · TP/SL: {res}")
 
     # -- daily summary -----------------------------------------------------------
     def daily_summary(self, equity: float, day_start: float) -> None:
@@ -438,6 +497,8 @@ class Bot:
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="BloFin demo breakout bot: one run")
     p.add_argument("--dry-run", action="store_true", help="print signals and sizing; send no orders, save no state")
+    p.add_argument("--manage-only", action="store_true",
+                   help="manage open trades (stops, break-even, trailing, TP/SL check) without evaluating new signals")
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
                         datefmt="%Y-%m-%dT%H:%M:%SZ")
@@ -446,7 +507,7 @@ def main(argv=None) -> int:
     alerter = Alerter(cfg, dry_run=args.dry_run)
     try:
         client = BlofinDemo(cfg)
-        return Bot(cfg, client, dry_run=args.dry_run, alerter=alerter).run()
+        return Bot(cfg, client, dry_run=args.dry_run, alerter=alerter, manage_only=args.manage_only).run()
     except Exception as e:  # noqa: BLE001
         log.error("run failed: %s\n%s", e, traceback.format_exc())
         alerter.send(f"💥 ERROR: run failed: {type(e).__name__}: {e}")

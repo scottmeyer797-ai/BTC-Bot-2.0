@@ -81,6 +81,38 @@ MODES = {
 }
 
 
+@dataclass(frozen=True)
+class ExitProtocol:
+    """How a trade is taken off. Partials are (R multiple or None = the mode's target, fraction of the entry size).
+
+    be_r: once the best price since entry reaches +be_r R, the stop moves to entry + costs.
+    trail: (k, activate_r or None = the mode's target): once reached, the stop trails at best price - k x ATR(4h).
+    lock_r: with a trail, the stop is also locked at +lock_r R when the trail activates.
+    max_bars: time exit in 4h bars.
+    Research: research/exit_study_results.md and research/partials_study_results.md.
+    """
+    name: str
+    partials: tuple
+    be_r: float | None
+    trail: tuple | None
+    max_bars: int
+    description: str
+
+    def runner(self) -> bool:
+        return self.trail is not None
+
+
+EXIT_PROTOCOLS = {
+    "B0": ExitProtocol("B0", ((None, 1.0),), None, None, 60, "100% at target, 60-bar time exit (original spec)"),
+    "BE2": ExitProtocol("BE2", ((None, 1.0),), 2.0, None, 60, "100% at target, break-even at +2R, 60-bar time exit"),
+    "R1": ExitProtocol("R1", ((None, 0.5),), 2.0, (3.0, None), 360,
+                       "break-even at +2R, 50% at target, runner trails 3 ATR, max 60 days"),
+    "R4": ExitProtocol("R4", ((2.0, 0.25), (None, 0.25)), 2.0, (3.0, None), 360,
+                       "break-even at +2R, 25% at 2R, 25% at target, runner trails 3 ATR, max 60 days"),
+}
+COSTS_RT = 0.0016  # round-trip cost used for the break-even price (fees + slippage)
+
+
 def _env_bool(raw: str | None, default: bool) -> bool:
     if raw is None or raw.strip() == "":
         return default
@@ -102,6 +134,9 @@ class Config:
     discord_webhook: str | None = field(default=None, repr=False)
     telegram_token: str | None = field(default=None, repr=False)
     telegram_chat_id: str | None = field(default=None, repr=False)
+    long_only: bool = True
+    exit_protocol: ExitProtocol = EXIT_PROTOCOLS["R1"]
+    volume_source: str = "binance"   # "binance" (Binance spot, public) or "blofin"
 
     @property
     def has_credentials(self) -> bool:
@@ -137,6 +172,12 @@ def load_config(env: dict | None = None) -> Config:
     state_dir = Path(env.get("STATE_DIR", repo_root / "state"))
     cache_dir = Path(env.get("CACHE_DIR", repo_root / "data" / "cache"))
     enabled = _env_bool(env.get("BOT_ENABLED"), True)
+    proto = env.get("EXIT_PROTOCOL", "R1").strip().upper()
+    if proto not in EXIT_PROTOCOLS:
+        raise ValueError(f"EXIT_PROTOCOL must be one of {sorted(EXIT_PROTOCOLS)}, got {proto!r}")
+    vol = env.get("VOLUME_SOURCE", "binance").strip().lower()
+    if vol not in ("binance", "blofin"):
+        raise ValueError(f"VOLUME_SOURCE must be binance or blofin, got {vol!r}")
     return Config(
         mode=MODES[mode_name],
         account_size=float(env.get("ACCOUNT_SIZE", "100000")),
@@ -151,4 +192,7 @@ def load_config(env: dict | None = None) -> Config:
         discord_webhook=env.get("DISCORD_WEBHOOK_URL") or None,
         telegram_token=env.get("TELEGRAM_BOT_TOKEN") or None,
         telegram_chat_id=env.get("TELEGRAM_CHAT_ID") or None,
+        long_only=_env_bool(env.get("LONG_ONLY"), True),
+        exit_protocol=EXIT_PROTOCOLS[proto],
+        volume_source=vol,
     )
