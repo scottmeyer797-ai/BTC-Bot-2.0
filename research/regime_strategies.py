@@ -394,6 +394,15 @@ def simulate_grid(h1, df, step_atr: float, levels: int = 5, life_days: int = 7, 
         end, k = j + life_days * 24, j + 1
         while k < min(end, n1):
             if lo[k] <= lo_stop or hi[k] >= hi_stop:
+                # levels crossed on the way to the stop are filled first, then stopped with the rest
+                if lo[k] <= lo_stop and allow_l:
+                    for lv in L:
+                        if L[lv] is None:
+                            L[lv], fills = c0 - lv * s, fills + 1
+                if hi[k] >= hi_stop and allow_s:
+                    for lv in Sx:
+                        if Sx[lv] is None:
+                            Sx[lv], fills = c0 + lv * s, fills + 1
                 for e in L.values():
                     if e is not None:
                         pnl += (lo_stop if lo[k] <= lo_stop else cl[k]) - e

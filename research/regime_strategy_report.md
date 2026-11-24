@@ -1,5 +1,11 @@
 # Which strategy types work in which BTC regime? (Jan 2020 – Nov 2026)
 
+> **Correction (grid results).** The first version of this report ranked grids near the top in range and bear markets.
+> That came from a bug in the grid simulator: when one 1h bar fell through several grid levels and then the stop, the levels
+> crossed on the way down were never filled, so stop-out losses were understated. With the bug fixed, **no grid variant shows
+> an edge in any regime** (best: +0.02R per cycle in range, t = 0.5). The tables below are corrected. All non-grid results
+> were unaffected.
+
 **Question:** for a set of regime-specific bots (bull / consolidation / bear), what are the 5 best strategy types for each
 regime, with a win rate of at least 30% and positive expectancy?
 
@@ -7,7 +13,7 @@ regime, with a win rate of at least 30% and positive expectancy?
 1. **The style matches the regime, but only in hindsight.** If you know in advance what the market will do over the next
    30 days:
    - long trend-following wins in bull months;
-   - grids, volume-spike entries and pullbacks win in sideways months;
+   - volume-spike entries, the current bot's longs and pullbacks win in sideways months (grids don't);
    - short momentum and shorting stretched rallies win in bear months.
 
    That supports your idea.
@@ -87,10 +93,9 @@ switching bot would need some delay or hysteresis before switching, which makes 
 | 1 | RSI(14) dip below 30, exit at Bollinger mid-band (buy the dip) | long | 20 | 65% | +0.56 | +0.50 | +0.56 / +0.56 |
 | 2 | Swing-level break + volume z>2, 3R (the current bot) | short | 24 | 42% | +0.28 | +0.49 | +1.33 / +0.01 |
 | 3 | Volume spike z>3, follow the candle, 3R | both | 61 | 34% | +0.17 | +0.23 | +0.25 / +0.11 |
-| 4 | Grid, 1.5 ATR spacing | both | 94 | 77% | +0.09 | (t = 2.0) | +0.12 / +0.08 |
-| — | *nothing else qualifies* | | | | | | |
+| — | *nothing else qualifies (the 1.5 ATR grid did before the correction)* | | | | | | |
 
-Only 4 qualify, and the samples are small. Trend following entered **after** a "bull" label underperforms: the move is
+Only 3 qualify, and the samples are small. Trend following entered **after** a "bull" label underperforms: the move is
 usually mature. In a confirmed bull, buying dips does better than chasing breakouts.
 
 ### Range label (no confirmed trend)
@@ -101,20 +106,20 @@ usually mature. In a confirmed bull, buying dips does better than chasing breako
 | 2 | Swing-level break + volume z>2, 3R (the current bot) | long | 99 | 43% | +0.49 | +0.46 (p = 0.00) | +0.32 / +0.57 |
 | 3 | Donchian-20 breakout, trail on 10-bar channel | long | 164 | 35% | +0.60 | +0.41 (p = 0.00) | +0.43 / +0.70 |
 | 4 | 20-day channel breakout, trail on 60-bar channel | both | 75 | 37% | +0.96 | +0.57 (p = 0.10) | +1.28 / +0.81 |
-| 5 | Grid, 0.5 ATR spacing | both | 504 | 44% | +0.13 | (t = 3.2) | +0.23 / +0.08 |
+| 5 | EMA 50/200 cross, exit on cross back | long | 32 | 44% | +5.89 | +5.74 (p = 0.10) | +10.33 / +3.22 |
 
-Also qualifying: EMA 50/200 cross, long (+5.9R per trade, but only 32 trades, carried by a few huge trends).
+EMA 50/200 is carried by a few huge trends (32 trades in 6.5 years).
 
-**This is where breakouts earn their money:** new trends start while the label still says "range". The grid also works
-here. Of everything in this study, the volume-spike rule and the grid are the strongest statistically (t ≈ 3).
+**This is where breakouts earn their money:** new trends start while the label still says "range". The corrected grid
+makes about +0.02R per weekly cycle here: no edge. Of everything in this study, the volume-spike rule is the strongest
+statistically (t ≈ 3).
 
 ### Bear label
 
 | # | Strategy | Dir | Trades | Win % | Net R / trade | Edge vs random twin | 2020–22 / 2023–26 |
 |---|---|---|---:|---:|---:|---:|---|
 | 1 | Failed breakout: 20-bar break, then 2 closes back inside, 2R | both | 24 | 58% | +0.42 | +0.53 (p = 0.00) | +0.35 / +0.50 |
-| 2 | Grid, 0.5 ATR spacing | short | 102 | 57% | +0.16 | (t = 2.6) | +0.09 / +0.24 |
-| 3 | Donchian-20 breakdown, trail on 10-bar channel | short | 25 | 36% | +0.25 | +0.30 (p = 0.00) | +0.15 / +0.34 |
+| 2 | Donchian-20 breakdown, trail on 10-bar channel | short | 25 | 36% | +0.25 | +0.30 (p = 0.00) | +0.15 / +0.34 |
 | — | *nothing else qualifies; runner-up, Supertrend flip short (+0.22R), misses the p ≤ 0.10 test (p = 0.16)* | | | | | | |
 
 There are only about 10 months of bear labels in 7 years, so every bear result rests on 25–100 trades. It is the
@@ -131,12 +136,12 @@ These answer "which style suits which kind of market". They can't be traded as s
 | 1 | EMA 20/50 cross, long: +5.8R, 44% win | Volume spike z>3, short: +0.32R, 40% | 30-day momentum, short: +1.9R, 43% |
 | 2 | Donchian-55 turtle, long: +4.1R, 65% | Current bot, long: +0.36R, 39% | Stretch fade (> 2.5 ATR above EMA20), short: +0.53R, 53% |
 | 3 | Donchian-20 + trail, long: +2.5R, 54% | 3-bar pullback in trend, short: +0.10R, 43% | EMA 20/50 cross, both: +0.71R, 32% |
-| 4 | Current bot, long: +1.5R, 70% | **Grid 0.5 ATR, both: +0.18R, 46% (t = 4.2)** | RSI(14) above 70 fade, short: +0.48R, 67% |
-| 5 | Chandelier trend, long: +1.5R, 58% | EMA20 pullback, long: +0.11R, 41% | Prior-day high sweep & reclaim, short: +0.25R, 49% |
+| 4 | Current bot, long: +1.5R, 70% | EMA20 pullback, long: +0.11R, 41% | RSI(14) above 70 fade, short: +0.48R, 67% |
+| 5 | Chandelier trend, long: +1.5R, 58% | *(only 4 qualify)* | Prior-day high sweep & reclaim, short: +0.25R, 49% |
 
 Your intuition holds **with perfect regime knowledge**:
 - in bull markets, long trend following and breakouts dominate;
-- in consolidation, grids and quick-target trades dominate;
+- in consolidation, volume-spike entries and the current bot's longs do best; grids are breakeven after the correction;
 - in bear markets the winners are **shorting strength**: sell rallies that are stretched (RSI > 70, more than 2.5 ATR
   above EMA20), sell sweeps above the prior day's high, and short 30-day momentum.
 
@@ -159,10 +164,10 @@ Your intuition holds **with perfect regime knowledge**:
    - **Always-on breakout / trend bot, long-biased** (volume spike z>3; current bot longs; Donchian-20 long). This is the
      part that catches new bull trends. Let the regime label switch **off its shorts** in a bull and its longs in a bear,
      because the label is good at ruling out the opposite trend.
-   - **Grid bot running only while the label says "range"**, turned off once a trend is confirmed. A neutral 0.5 ATR grid
-     works in range (+0.13R per weekly cycle), and short-only in bear.
-   - **Bear bot that shorts strength** (failed breakouts, stretched-rally fades, short-only grid), allowed only while the
-     label says bear. It has the least evidence, so give it the smallest size.
+   - **No grid bot for now.** Corrected for the simulator bug, ATR-spaced grids at 0.5 / 1 / 1.5 ATR are breakeven in
+     every regime. A grid would need a different design (wider range, no hard stop, funding-aware) and its own test first.
+   - **Bear bot that shorts strength** (failed breakouts, Donchian-20 breakdowns), allowed only while the label says bear.
+     It has the least evidence, so give it the smallest size.
 3. **Better regime detection is the most valuable next research.** Even a modest improvement in predicting the next 30
    days matters more than any single strategy here. Candidates to test: faster labels (weekly structure, 20-day channel
    position), volatility regime (ATR percentile), funding rate and open interest.
@@ -170,12 +175,13 @@ Your intuition holds **with perfect regime knowledge**:
 ## How much to trust this
 
 - **84 variants × 3 regimes × 2 views were tested.** Some winners are luck. Results with t ≥ 3 are the most trustworthy:
-  volume-spike in range, grid in range, and the hindsight bull trend strategies. Results with t < 1.5 are leads, not
+  volume-spike in range and the hindsight bull trend strategies. Results with t < 1.5 are leads, not
   edges.
 - **Bull and bear samples are small** (20–100 trades). Range results rest on 100–500 trades.
 - **BTC only.** The earlier report found the volume-spike rule also works on ETH, SOL, XRP and BNB. The other rules here
   haven't been checked on other coins yet.
-- **Not modelled:** funding payments, and position sizing across bots running at the same time. Costs are assumed.
+- **Not modelled here:** funding payments, and position sizing across bots running at the same time. Costs are assumed.
+  The follow-up backtest (`research/backtest_report.md`) adds funding, next-bar fills and an out-of-sample coin.
 - **R sizes aren't comparable across strategies.** Trailing-stop systems have a few very large winners (5R+), grids have
   many small ones. Compare on edge vs the random twin and on consistency, not raw R.
 

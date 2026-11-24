@@ -196,10 +196,24 @@ def simulate_grid(mk: Mkt, step_atr: float, direction: str, gate: str | None, le
         L = {lv: None for lv in range(1, levels + 1)}
         Sx = {lv: None for lv in range(1, levels + 1)}
         pnl, fills, k = 0.0, 0, j + 1
+        worst, t_worst = 0.0, int(ts1[j])
         while k < min(j + life_days * 24, n1):
+            open_pnl = pnl + sum(lo[k] - e for e in L.values() if e is not None) + \
+                sum(e - hi[k] for e in Sx.values() if e is not None)
+            if open_pnl < worst:
+                worst, t_worst = open_pnl, int(ts1[k])
             if lo[k] <= lo_stop or hi[k] >= hi_stop:
                 down = lo[k] <= lo_stop
                 px = min(o1[k], lo_stop) if down else max(o1[k], hi_stop)  # gap-aware
+                # levels crossed on the way to the stop are filled first, then stopped with the rest
+                if down and allow_l:
+                    for lv in L:
+                        if L[lv] is None:
+                            L[lv], fills = c0 - lv * s, fills + 1
+                if not down and allow_s:
+                    for lv in Sx:
+                        if Sx[lv] is None:
+                            Sx[lv], fills = c0 + lv * s, fills + 1
                 for e in L.values():
                     if e is not None:
                         pnl += (px if down else cl[k]) - e
@@ -236,10 +250,10 @@ def simulate_grid(mk: Mkt, step_atr: float, direction: str, gate: str | None, le
         pnl -= fills * MAKER_RT * c0
         r = pnl / (risk_units * s)
         rows.append((int(ts1[j]), int(ts1[k]), 0, c0, cl[k], risk_units * s / c0, r, 0.0, r, -1, -1,
-                     mk.regime_at(int(ts1[j]))))
+                     mk.regime_at(int(ts1[j])), min(worst / (risk_units * s), r), t_worst))
         j = k + 1
     return pd.DataFrame(rows, columns=["t_in", "t_out", "side", "entry", "exit", "stop_pct", "r_gross", "r_fund",
-                                       "r", "i_in", "k_out", "regime"])
+                                       "r", "i_in", "k_out", "regime", "r_worst", "t_worst"])
 
 
 def run(mk: Mkt, name: str, direction: str, gate: str | None):
@@ -255,9 +269,12 @@ def equity_curve(t: pd.DataFrame, mk: Mkt) -> pd.Series:
     e = 1.0
     last_k = mk.start_i
     for row in t.itertuples():
-        if row.i_in < 0:  # grid: realized at cycle end
+        if row.i_in < 0:  # grid: realized at cycle end, worst open P&L inside the cycle marked too
             k = int(np.searchsorted(mk.ts4, row.t_out))
             eq[last_k:k] = e
+            w = int(np.searchsorted(mk.ts4, row.t_worst))
+            if last_k <= w < k:
+                eq[w] = e * (1 + RISK * row.r_worst)
             e *= 1 + RISK * row.r
             last_k = k
             continue
