@@ -124,3 +124,82 @@ by a few big trends):
   winners. Expect long losing streaks: 7–13 losses in a row on BTC, and up to 21–24 for the EMA 20/50 cross on ADA.
 - **Venue:** Binance prices and funding were used. BloFin fills and funding will differ slightly, and BloFin's volume
   differs a lot, which matters for the volume filter of the current bot.
+
+---
+
+## Extra out-of-sample check: LINK and SOL
+
+The same 46 variants were run on **LINK** (Jan 2020 – Nov 2026) and **SOL** (Sept 2020 – Nov 2026, from its listing), with
+the same code, settings and costs, and real funding for each coin. LINK had never been looked at before. SOL had been seen
+once, in the first report's cross-check of the volume-spike rule only.
+
+**Classes over the 3 out-of-sample coins (ADA, LINK, SOL):**
+- **ROBUST:** profitable (mean R > 0 and Sharpe > 0) on all 3, and PASS on at least 2.
+- **PROMISING:** profitable on all 3, fewer than 2 PASS.
+- **MIXED:** profitable on 1 or 2.
+- **OVERFIT:** profitable on none.
+
+Script: `research/rank_multi.py`; numbers in `research/results/ranking_multi.json`.
+
+### ROBUST
+
+| Strategy | Mode | BTC R / win | ADA R / win (p) | LINK R / win (p) | SOL R / win (p) | Pooled out-of-sample R |
+|---|---|---|---|---|---|---:|
+| **Current bot, long** | **range only** | +0.46 / 44% | +0.30 / 36% (0.00) PASS | +0.11 / 30% (0.05) PASS | +0.32 / 35% (0.00) PASS | +0.23 |
+| **Current bot, long** | **always on** | +0.35 / 40% | +0.11 / 31% (0.00) PASS | +0.21 / 33% (0.05) PASS | +0.25 / 33% (0.00) PASS | +0.19 |
+| Current bot, long | bull only | +0.52 / 41% | +0.38 / 37% (0.10) PASS | +0.27 / 35% (0.10) PASS | +0.27 / 33% (0.20) WEAK | +0.31 |
+| Donchian-20 breakout + trail, long | bull only | +0.12 / 32% | +0.55 / 35% (0.00) PASS | +0.28 / 40% (0.10) PASS | +0.14 / 31% (0.30) WEAK | +0.31 |
+| Grid 0.5 ATR, both | range only | +0.01 / 40% | +0.08 / 44% PASS | +0.13 / 46% PASS | +0.07 / 41% WEAK | +0.10 |
+
+How unlikely is this by luck? For a strategy with no edge, PASS on all 3 coins (each p ≤ 0.10) has roughly a 1-in-1,000
+chance, and PASS on 2 of 3 roughly 3%. Among ~32 variants, about one "2 of 3" result is expected by luck alone, but a
+"3 of 3" isn't. **The current bot's long side (range-gated or always on) is the one result that is very unlikely to be
+luck.** The grid works on the alts but not on BTC itself (+0.01R), so treat it as an alt-only idea. Its funding cost is
+not modelled.
+
+### PROMISING (profitable everywhere, edge not proven or win rate < 30%)
+
+| Strategy | Mode | BTC R / win | ADA | LINK | SOL |
+|---|---|---|---|---|---|
+| EMA 20/50 cross, long | always on | +0.84 / 24% | +0.64 / 20% | +0.46 / 21% | +0.88 / 29% |
+| EMA 20/50 cross, both | always on | +0.41 / 25% | +0.36 / 26% | +0.26 / 23% | +0.49 / 28% |
+| Donchian-55 turtle, long | always on | +0.60 / 34% | +0.42 / 28% | +0.11 / 25% | +0.68 / 35% |
+| Donchian-55 turtle, long | bull only | +0.48 / 31% | +0.24 / 28% | +0.34 / 28% | +1.46 / 45% |
+| Donchian-20 breakout + trail, long | always on | +0.31 / 33% | +0.15 / 30% | +0.01 / 31% | +0.19 / 34% |
+| 3-bar pullback in trend, short | range only | +0.13 / 44% | +0.00 / 36% | +0.17 / 43% | +0.20 / 42% |
+
+Long trend following makes money on every coin, but with 20–35% win rates and long losing streaks. The EMA 20/50 cross
+has the biggest pooled gain (+0.65R per trade) but fails your 30% win-rate bar everywhere.
+
+### MIXED or worse
+
+- **Volume spike z>3 (every variant):** passes on SOL, weak on ADA, **loses on LINK**. SOL's ranking tracks BTC's closely
+  (rank correlation +0.73), which flatters it. Coin-dependent, not a general edge.
+- **20-day channel breakout:** big on BTC, ADA and SOL, **loses on LINK**.
+- **Current bot, short side:** about zero everywhere (pooled +0.05R), with large drawdowns.
+- **All bear-market strategies** (failed-breakout fade, RSI > 70 fade, stretch fade, prior-day sweep, short grid,
+  Donchian-20 breakdown): none is profitable on all 3 coins. Pooled out-of-sample R ranges from −0.14 to +0.15.
+
+**Rank agreement of mean R across the 46 variants:**
+
+| | ADA | LINK | SOL |
+|---|---:|---:|---:|
+| BTC | +0.33 | +0.37 | +0.73 |
+| ADA | | +0.22 | +0.41 |
+| LINK | | | +0.31 |
+
+### Updated bottom line
+
+| Regime | What survives 4 coins | Confidence |
+|---|---|---|
+| **Bull** | Current bot longs; Donchian-20 long (bull-gated); long trend following (EMA 20/50, Donchian-55), but expect a low win rate | high for current bot longs, medium for the rest |
+| **Range / consolidation** | **Current bot longs, range-gated**: PASS on all 3 out-of-sample coins. On alts only: a 0.5 ATR neutral grid | high / low |
+| **Bear** | **Nothing.** Stay flat or let long-only systems go quiet | none of the shorts survived |
+
+**For the running bot:** this strengthens the case for going **long-only**:
+- the long side passes on 3 of 3 unseen coins;
+- the short side earns about zero after costs.
+
+**One caveat that matters for the live bot:** these backtests use Binance volume for the z > 2 filter, while the live bot
+uses BloFin volume, which only partly matches. Switching the volume source to Binance would make the live bot match what
+was tested.
