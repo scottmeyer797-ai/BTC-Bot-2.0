@@ -83,6 +83,9 @@ In the repository: **Settings → Secrets and variables → Actions**.
 | `MODE` | `challenge` | `challenge` or `funded` |
 | `ACCOUNT_SIZE` | `100000` | notional prop-firm account size |
 | `BOT_ENABLED` | `true` | `false` = kill switch |
+| `EXIT_PROTOCOL` | `R1` | how trades are taken off: `R1`, `R4`, `BE2` or `B0` (see "Exit plans" below) |
+| `LONG_ONLY` | `true` | `false` re-enables short trades |
+| `VOLUME_SOURCE` | `binance` | `binance` (Binance spot 4h volume, public) or `blofin` |
 
 Credentials are only read from the environment. They are never written to files or logs.
 
@@ -96,6 +99,8 @@ python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 ## Running it
 
+- **Manage-only run** (`python -m bot.run --manage-only`, or tick "Manage only" in Actions): updates stops,
+  break-even and trailing, checks TP/SL, books exits; evaluates no new signals.
 - **Dry run** (prints signals and sizing; no orders, no state saved). It works even without API keys, using public
   candle data only:
   ```bash
@@ -104,7 +109,7 @@ python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
   On GitHub: **Actions → bot → Run workflow**, with "Dry run" ticked (the default).
 - **One live-demo run**: the same, with "Dry run" unticked.
 - **Schedule**: the `schedule:` lines in `.github/workflows/bot.yml` are commented out. Uncomment them to run every
-  4 hours. GitHub may start scheduled runs several minutes late; that's fine because the bot always evaluates the
+  hour at :02. Runs right after a 4h close look for new entries; the others only manage open trades. GitHub may start scheduled runs several minutes late; that's fine because the bot always evaluates the
   last *closed* bar. If a whole bar is missed, its signals are logged as `stale` and not traded.
 - **Self-test of orders and TP/SL** (Actions → bot → Run workflow → tick "Self-test"): opens the minimum
   BTC-USDT size (0.0001 BTC) on demo with stop and target attached, checks BloFin lists them, deletes them and
@@ -124,6 +129,49 @@ bot-state/
   logs/trades.csv     entries, exits, fees, funding, TP/SL repairs, failures
   reports/weekly.md   weekly report (Mondays 00:02 UTC, or on request)
 ```
+
+## Exit plans, direction and volume (v2)
+
+The research in `research/` led to three changes from the original spec. All three can be switched back with the
+variables above.
+
+| Setting | Default | What it does | Why |
+|---|---|---|---|
+| `EXIT_PROTOCOL=R1` | on | Stop to **break-even (entry + costs) once +2R is reached**; **50% off at the target** (3R challenge / 5R funded); the other 50% **trails 3 × ATR(4h)** below the best price since entry; max hold 60 days | best runner design in `partials_study_results.md`: better than 100%-at-3R in all five test sets (+0.11R per trade, not yet statistically proven) |
+| `EXIT_PROTOCOL=R4` | | Break-even at +2R; 25% off at 2R, 25% at the target, 50% trails 3 ATR | same idea with a 41% win rate and shorter losing streaks |
+| `EXIT_PROTOCOL=BE2` | | 100% at the target, break-even at +2R, 60-bar time exit | |
+| `EXIT_PROTOCOL=B0` | | 100% at the target, 60-bar time exit (the original spec) | |
+| `LONG_ONLY=true` | on | short signals are logged as "long-only mode" and not traded | the long side passed on 3 of 3 unseen coins; the short side made about zero after costs (`backtest_report.md`) |
+| `VOLUME_SOURCE=binance` | on | the volume z-score uses Binance spot 4h volume; prices, levels and orders stay on BloFin. If Binance is unreachable the run falls back to BloFin volume and alerts | BloFin's volume flags only ~40–50% of the spikes the strategy was researched on; Binance spot ~75–80% |
+
+**How the exit plan runs on the exchange.**
+- The stop is always on BloFin for the full open size. Each partial target is its own reduce-only take-profit order for
+  its share.
+- Break-even and the trailing stop are moved by the bot (exchanges don't trail for you). That means they're only as fresh
+  as the last run.
+- With the hourly schedule (below), runs between the 4h closes only manage open trades (`--manage-only`). Stops then move
+  every hour instead of every 4 hours.
+- If price is already beyond a newly moved stop when the bot runs, the trade is closed at market.
+
+**Open-risk cap.** The 4% / 3% cap counts the money still at stake: entry to the *current* stop. A trade whose stop is
+at break-even no longer blocks new entries.
+
+## Dashboard
+
+`scripts/export_dashboard.py` runs after every bot run. It writes `docs/index.html` and `docs/data.json` to the
+`bot-state` branch, which together are the whole dashboard:
+- live equity, P&L and limit gauges (prices from BloFin demo every 10 s);
+- equity curve and open positions with stop / break-even / trailing status;
+- full, searchable trade history (click any trade for its timeline, fills, signal and raw record);
+- signals log, event log, configuration and the last exchange self-test;
+- CSV export of any filtered table.
+
+The page reloads the bot's data every 60 s.
+
+**Hosting:** in GitHub, **Settings → Pages → Build and deployment → Deploy from a branch → `bot-state` / `/docs`**.
+- Pages on a **private** repository needs a paid GitHub plan (Pro or higher).
+- On any plan, a Pages site can be opened by anyone with the link.
+- Without Pages, download the `docs` folder and run `python -m http.server` inside it, then open http://localhost:8000.
 
 ## Switching modes
 

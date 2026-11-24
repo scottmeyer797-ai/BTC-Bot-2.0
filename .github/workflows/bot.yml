@@ -18,8 +18,13 @@ on:
         description: "Self-test only: open/close the minimum BTC size to check orders and TP/SL (ignores Dry run)"
         type: boolean
         default: false
+      manage_only:
+        description: "Manage open trades only (stops, break-even, trailing, TP/SL check); no new entries"
+        type: boolean
+        default: false
   # schedule:
-  #   - cron: "2 0,4,8,12,16,20 * * *"   # 2 minutes past every 4h UTC boundary
+  #   - cron: "2 * * * *"   # every hour at :02 UTC. Runs right after a 4h close (00,04,..,20) look for new
+  #                         # entries; the hours in between only manage open trades (break-even / trailing).
 
 concurrency:
   group: blofin-bot          # never two runs at once; queued runs wait
@@ -36,6 +41,9 @@ jobs:
       MODE: ${{ vars.MODE || 'challenge' }}
       ACCOUNT_SIZE: ${{ vars.ACCOUNT_SIZE || '100000' }}
       BOT_ENABLED: ${{ vars.BOT_ENABLED || 'true' }}
+      EXIT_PROTOCOL: ${{ vars.EXIT_PROTOCOL || 'R1' }}
+      LONG_ONLY: ${{ vars.LONG_ONLY || 'true' }}
+      VOLUME_SOURCE: ${{ vars.VOLUME_SOURCE || 'binance' }}
       BLOFIN_API_KEY: ${{ secrets.BLOFIN_API_KEY }}
       BLOFIN_API_SECRET: ${{ secrets.BLOFIN_API_SECRET }}
       BLOFIN_PASSPHRASE: ${{ secrets.BLOFIN_PASSPHRASE }}
@@ -78,6 +86,10 @@ jobs:
             python -m bot.selftest
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
             python -m bot.run --dry-run
+          elif [ "${{ inputs.manage_only }}" = "true" ]; then
+            python -m bot.run --manage-only
+          elif [ "${{ github.event_name }}" = "schedule" ] && [ $(( $(date -u +%H) % 4 )) -ne 0 ]; then
+            python -m bot.run --manage-only
           else
             python -m bot.run
           fi
@@ -88,6 +100,10 @@ jobs:
           if [ "$(date -u +%u%H)" = "100" ] || [ "${{ inputs.report }}" = "true" ]; then
             python scripts/weekly_report.py || echo "report skipped"
           fi
+
+      - name: Export dashboard (bot-state/docs)
+        if: always()
+        run: python scripts/export_dashboard.py || echo "dashboard export failed"
 
       - name: Commit state and logs to bot-state
         if: always()
