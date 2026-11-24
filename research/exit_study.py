@@ -68,6 +68,9 @@ class Exits:
         self.close4 = mk.ts4 + BAR4
         self.atr4 = mk.df.atr.to_numpy()
         self.low10 = mk.df.low.rolling(10).min().to_numpy()
+        self.ema50 = mk.df.ema50.to_numpy()
+        self.close_px4 = mk.df.close.to_numpy()
+        self.close4_set = set(int(x) for x in self.close4)
 
     def last_closed_4h(self, t):
         return int(np.searchsorted(self.close4, t, side="right")) - 1
@@ -121,7 +124,14 @@ class Exits:
                         locked = True
                 if trail_on:
                     b = self.last_closed_4h(ts1[j] + 3600_000)  # 4h bars closed by the end of this 1h bar
-                    if kind == "atr" and b >= 0 and np.isfinite(self.atr4[b]):
+                    if kind == "ema50":
+                        # runner exits at the next open after a 4h close below the 4h EMA50
+                        t_px = None
+                        if int(ts1[j]) + 3600_000 in self.close4_set and b >= 0 and \
+                                self.close_px4[b] < self.ema50[b] and j + 1 < n1:
+                            fills.append((rem, o1[j + 1], ts1[j + 1])); rem = 0
+                            break
+                    elif kind == "atr" and b >= 0 and np.isfinite(self.atr4[b]):
                         t_px = hh - k * self.atr4[b]
                     elif kind == "struct" and b >= 0 and np.isfinite(self.low10[b]):
                         t_px = self.low10[b]
