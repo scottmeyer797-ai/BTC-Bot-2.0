@@ -22,9 +22,11 @@ on:
         description: "Manage open trades only (stops, break-even, trailing, TP/SL check); no new entries"
         type: boolean
         default: false
-  # schedule:
-  #   - cron: "2 * * * *"   # every hour at :02 UTC. Runs right after a 4h close (00,04,..,20) look for new
-  #                         # entries; the hours in between only manage open trades (break-even / trailing).
+  schedule:
+    # Every hour at :02 UTC. GitHub often starts scheduled runs hours late or skips them; with hourly runs a
+    # new 4h bar is still picked up within about an hour. Each 4h bar is evaluated once (later runs only
+    # manage open trades: break-even, trailing stop, TP/SL check).
+    - cron: "2 * * * *"
 
 concurrency:
   group: blofin-bot          # never two runs at once; queued runs wait
@@ -87,8 +89,6 @@ jobs:
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
             python -m bot.run --dry-run
           elif [ "${{ inputs.manage_only }}" = "true" ]; then
-            python -m bot.run --manage-only
-          elif [ "${{ github.event_name }}" = "schedule" ] && [ $(( $(date -u +%H) % 4 )) -ne 0 ]; then
             python -m bot.run --manage-only
           else
             python -m bot.run

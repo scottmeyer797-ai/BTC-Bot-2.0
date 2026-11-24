@@ -108,8 +108,9 @@ python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
   ```
   On GitHub: **Actions → bot → Run workflow**, with "Dry run" ticked (the default).
 - **One live-demo run**: the same, with "Dry run" unticked.
-- **Schedule**: the `schedule:` lines in `.github/workflows/bot.yml` are commented out. Uncomment them to run every
-  hour at :02. Runs right after a 4h close look for new entries; the others only manage open trades. GitHub may start scheduled runs several minutes late; that's fine because the bot always evaluates the
+- **Schedule**: `.github/workflows/bot.yml` runs the bot every hour at :02 UTC. Each new 4h bar is evaluated once
+  (by the first run after it closes); the other runs only manage open trades. Hourly runs matter because GitHub
+  often starts scheduled runs hours late or skips them: on 4h-only schedules that made the bot miss signals. GitHub may start scheduled runs several minutes late; that's fine because the bot always evaluates the
   last *closed* bar. If a whole bar is missed, its signals are logged as `stale` and not traded.
 - **Self-test of orders and TP/SL** (Actions → bot → Run workflow → tick "Self-test"): opens the minimum
   BTC-USDT size (0.0001 BTC) on demo with stop and target attached, checks BloFin lists them, deletes them and
@@ -149,8 +150,8 @@ variables above.
   its share.
 - Break-even and the trailing stop are moved by the bot (exchanges don't trail for you). That means they're only as fresh
   as the last run.
-- With the hourly schedule (below), runs between the 4h closes only manage open trades (`--manage-only`). Stops then move
-  every hour instead of every 4 hours.
+- With the hourly schedule, runs between the 4h closes only manage open trades, so stops move every hour instead of
+  every 4 hours.
 - If price is already beyond a newly moved stop when the bot runs, the trade is closed at market.
 
 **Open-risk cap.** The 4% / 3% cap counts the money still at stake: entry to the *current* stop. A trade whose stop is
