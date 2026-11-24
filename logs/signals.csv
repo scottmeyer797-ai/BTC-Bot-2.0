@@ -1,0 +1,5 @@
+run_time,bar_close,symbol,side,level,close,atr,stop,target,stop_pct,vol_z,vol_rank,btc_trend,mode,action,reason,risk_pct,risk_amount,contracts,leverage,note,dry_run
+2026-11-24T02:49:08Z,2026-11-23T16:00:00Z,BTC,long,62512.5,62875.7,1376.264286,61824.36786,66029.69643,0.0167208022,2.872262725,0.96,-1,challenge,skipped,stale: the bot did not run after this bar closed,,,,,,False
+2026-11-24T02:49:08Z,2026-11-23T16:00:00Z,XRP,long,0.9868,0.9922,0.02247142857,0.9755642857,1.042107143,0.01676649293,3.868695108,0.816,-1,challenge,skipped,stale: the bot did not run after this bar closed,,,,,,False
+2026-11-24T02:49:08Z,2026-11-23T16:00:00Z,LINK,long,9.198,9.256,0.1907857143,9.102607143,9.716178571,0.01657226201,3.533553379,0.614,-1,challenge,skipped,stale: the bot did not run after this bar closed,,,,,,False
+2026-11-24T02:49:08Z,2026-11-23T16:00:00Z,SOL,long,74.96,75.63,1.731428571,74.09428571,80.23714286,0.02030562324,4.069279779,0.815,-1,challenge,skipped,stale: the bot did not run after this bar closed,,,,,,False
