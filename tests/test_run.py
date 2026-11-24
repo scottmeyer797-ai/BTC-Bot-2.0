@@ -23,8 +23,10 @@ class Alerts:
 @pytest.fixture
 def env(tmp_path):
     def make(mode="challenge", **extra):
+        # these tests cover the original behaviour; the new exit protocols have their own tests
         e = {"MODE": mode, "REPO_ROOT": str(tmp_path), "STATE_DIR": str(tmp_path / "state"),
-             "CACHE_DIR": str(tmp_path / "cache")}
+             "CACHE_DIR": str(tmp_path / "cache"), "EXIT_PROTOCOL": "B0", "VOLUME_SOURCE": "blofin",
+             "LONG_ONLY": "false"}
         e.update(extra)
         return load_config(e)
     return make

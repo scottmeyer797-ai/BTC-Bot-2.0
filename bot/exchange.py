@@ -213,17 +213,19 @@ class BlofinDemo:
         })
 
     # -- orders ------------------------------------------------------------
-    def market_entry(self, inst: Instrument, side: str, contracts: Decimal, stop: float, target: float,
+    def market_entry(self, inst: Instrument, side: str, contracts: Decimal, stop: float, target: float | None,
                      client_oid: str) -> str:
-        """Market entry with TP/SL attached (both trigger market orders, -1 = market)."""
+        """Market entry with the stop (and, if given, the target) attached as trigger-market orders (-1 = market)."""
         self._need_private()
-        data = self._call("privatePostTradeOrder", {
+        req = {
             "instId": inst.inst_id, "marginMode": MARGIN_MODE, "positionSide": POSITION_SIDE,
             "side": side, "orderType": "market", "size": inst.fmt_contracts(contracts),
             "clientOrderId": client_oid,
             "slTriggerPrice": inst.fmt_price(stop), "slOrderPrice": "-1",
-            "tpTriggerPrice": inst.fmt_price(target), "tpOrderPrice": "-1",
-        })
+        }
+        if target is not None:
+            req.update(tpTriggerPrice=inst.fmt_price(target), tpOrderPrice="-1")
+        data = self._call("privatePostTradeOrder", req)
         first = data[0] if isinstance(data, list) else data
         if str(first.get("code", "0")) != "0":
             raise ccxt.ExchangeError(f"entry rejected: {first}")
@@ -263,16 +265,22 @@ class BlofinDemo:
             ))
         return out
 
-    def place_tpsl(self, inst: Instrument, close_side: str, contracts: Decimal, stop: float, target: float,
-                   client_oid: str) -> str:
+    def place_tpsl(self, inst: Instrument, close_side: str, contracts: Decimal, stop: float | None,
+                   target: float | None, client_oid: str) -> str:
+        """Reduce-only TP/SL order for `contracts`. Either leg may be None (stop-only or take-profit-only)."""
         self._need_private()
-        data = self._call("privatePostTradeOrderTpsl", {
+        if stop is None and target is None:
+            raise ValueError("place_tpsl needs a stop or a target")
+        req = {
             "instId": inst.inst_id, "marginMode": MARGIN_MODE, "positionSide": POSITION_SIDE,
             "side": close_side, "size": inst.fmt_contracts(contracts), "reduceOnly": "true",
             "clientOrderId": client_oid,
-            "slTriggerPrice": inst.fmt_price(stop), "slOrderPrice": "-1",
-            "tpTriggerPrice": inst.fmt_price(target), "tpOrderPrice": "-1",
-        })
+        }
+        if stop is not None:
+            req.update(slTriggerPrice=inst.fmt_price(stop), slOrderPrice="-1")
+        if target is not None:
+            req.update(tpTriggerPrice=inst.fmt_price(target), tpOrderPrice="-1")
+        data = self._call("privatePostTradeOrderTpsl", req)
         d = data[0] if isinstance(data, list) else data
         if str(d.get("code", "0")) != "0":
             raise ccxt.ExchangeError(f"tpsl rejected: {d}")

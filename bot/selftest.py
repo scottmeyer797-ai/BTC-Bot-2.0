@@ -68,11 +68,13 @@ def main() -> int:
     check("account modes net + isolated", True, "; ".join(notes) or "already set")
     inst = client.instruments()[INST]
     price = client.last_prices()[INST]
-    contracts = inst.min_size
+    contracts = inst.min_size * 2   # two minimum lots, so a half-size take-profit is possible
     stop, target = price * 0.97, price * 1.05
     trade = {"id": f"selftest{int(time.time())}", "symbol": "BTC", "inst_id": INST, "side": "long",
              "contracts": str(contracts), "contract_value": str(inst.contract_value), "stop": stop,
-             "target": target, "ref_price": price, "entry_bar_close_ts": int(time.time() * 1000)}
+             "target": target, "ref_price": price, "entry_bar_close_ts": int(time.time() * 1000),
+             # one combined stop + take-profit for the whole size (the B0/BE2 layout)
+             "partials": [{"r": 5.0, "frac": 1.0, "contracts": str(contracts), "price": target, "done": False}]}
     tmp = Path(tempfile.mkdtemp())
     rec = Reconciler(client, {"open_trades": [], "closed_trades": [], "realized_pnl": 0.0,
                               "consecutive_losses": 0}, {INST: inst}, Journal(tmp), _NoAlerts(),
@@ -122,6 +124,26 @@ def main() -> int:
               and after[0].tp_trigger is not None, res)
         res2 = rec.verify_tpsl(trade)
         check("second check finds them in place", res2 == "ok", res2)
+
+        # runner protocols (R1/R4): a full-size stop-only order plus a half-size take-profit-only order
+        client.cancel_tpsl(INST, [o.tpsl_id for o in client.pending_tpsl(INST)])
+        time.sleep(1)
+        half = inst.round_contracts_down(contracts / 2)
+        client.place_tpsl(inst, "sell", contracts, stop, None, f"sls{int(time.time())}")
+        client.place_tpsl(inst, "sell", half, None, target, f"tps{int(time.time())}")
+        time.sleep(2)
+        split = client.pending_tpsl(INST)
+        log.info("stop-only + take-profit-only orders (parsed): %s", split)
+        raw = client._call("privateGetTradeOrdersTpslPending", {"instId": INST})
+        log.info("stop-only + take-profit-only orders (raw): %s", json.dumps(raw))
+        sl_only = [o for o in split if o.sl_trigger is not None and o.tp_trigger is None]
+        tp_only = [o for o in split if o.tp_trigger is not None and o.sl_trigger is None]
+        check("stop-only order accepted (full size)",
+              len(sl_only) == 1 and (sl_only[0].size is None or abs(sl_only[0].size - float(contracts)) < 1e-9),
+              f"{sl_only}")
+        check("take-profit-only order accepted (half size)",
+              len(tp_only) == 1 and tp_only[0].size is not None and abs(tp_only[0].size - float(half)) < 1e-9,
+              f"{tp_only}")
     except Exception as e:  # noqa: BLE001
         check("no exceptions", False, f"{type(e).__name__}: {e}")
     finally:

@@ -122,7 +122,8 @@ class FakeExchange:
         if self.attached_tpsl_visible:
             tid = str(next(self.ids))
             self.tpsl[tid] = TpslOrder(tid, inst.inst_id, "sell" if side == "buy" else "buy", None,
-                                       float(inst.round_price(target)), float(inst.round_price(stop)))
+                                       None if target is None else float(inst.round_price(target)),
+                                       float(inst.round_price(stop)))
         return oid
 
     def order_by_client_id(self, inst_id, client_oid):
@@ -134,8 +135,9 @@ class FakeExchange:
     def place_tpsl(self, inst, close_side, contracts, stop, target, client_oid):
         self.calls.append(("place_tpsl", inst.inst_id, str(contracts), stop, target))
         tid = str(next(self.ids))
-        self.tpsl[tid] = TpslOrder(tid, inst.inst_id, close_side, float(contracts), float(inst.round_price(target)),
-                                   float(inst.round_price(stop)))
+        self.tpsl[tid] = TpslOrder(tid, inst.inst_id, close_side, float(contracts),
+                                   None if target is None else float(inst.round_price(target)),
+                                   None if stop is None else float(inst.round_price(stop)))
         return tid
 
     def cancel_tpsl(self, inst_id, ids):
@@ -143,10 +145,16 @@ class FakeExchange:
         for i in ids:
             self.tpsl.pop(i, None)
 
-    def _exit(self, inst_id, price):
-        p = self.pos.pop(inst_id)
+    def _exit(self, inst_id, price, size=None):
+        p = self.pos[inst_id]
         side = "sell" if p["contracts"] > 0 else "buy"
-        self._fill(inst_id, side, abs(p["contracts"]), price, str(next(self.ids)), self.world.end_ms + 30_000)
+        size = abs(p["contracts"]) if size is None else min(size, abs(p["contracts"]))
+        self._fill(inst_id, side, size, price, str(next(self.ids)), self.world.end_ms + 30_000)
+        left = abs(p["contracts"]) - size
+        if left <= 1e-12:
+            del self.pos[inst_id]
+        else:
+            p["contracts"] = left if p["contracts"] > 0 else -left
 
     def close_position(self, inst_id, client_oid):
         self.calls.append(("close_position", inst_id))
@@ -161,9 +169,18 @@ class FakeExchange:
 
     # test helpers ------------------------------------------------------------
     def trigger_stop(self, inst_id):
-        o = next(o for o in self.tpsl.values() if o.inst_id == inst_id)
+        o = next(o for o in self.tpsl.values() if o.inst_id == inst_id and o.sl_trigger is not None)
         self._exit(inst_id, o.sl_trigger)
         self.tpsl = {k: v for k, v in self.tpsl.items() if v.inst_id != inst_id}
+
+    def trigger_tp(self, inst_id):
+        """Fill the nearest take-profit order (partial or full)."""
+        tps = [(k, o) for k, o in self.tpsl.items() if o.inst_id == inst_id and o.tp_trigger is not None]
+        k, o = min(tps, key=lambda x: x[1].tp_trigger)
+        self._exit(inst_id, o.tp_trigger, o.size)
+        del self.tpsl[k]
+        if inst_id not in self.pos:
+            self.tpsl = {k: v for k, v in self.tpsl.items() if v.inst_id != inst_id}
 
     def manual_close(self, inst_id, price):
         self._exit(inst_id, price)
