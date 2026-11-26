@@ -8,7 +8,8 @@
     "2026-11-22": 100000.0,
     "2026-11-23": 100000.0,
     "2026-11-24": 100000.0,
-    "2026-11-25": 100000.0
+    "2026-11-25": 100000.0,
+    "2026-11-26": 100000.0
   },
   "equity_history": [
     {
@@ -153,14 +154,25 @@
       "realized": 0.0,
       "time": "2026-11-25T21:22:30Z",
       "unrealized": 0
+    },
+    {
+      "bar_close": "2026-11-26T00:00:00Z",
+      "day_start": 100000.0,
+      "dry_run": false,
+      "equity": 100000.0,
+      "open_risk": 0.0,
+      "open_trades": 0,
+      "realized": 0.0,
+      "time": "2026-11-26T03:54:38Z",
+      "unrealized": 0
     }
   ],
   "failed": false,
   "failed_at": null,
   "failed_reason": null,
-  "last_daily_summary": "2026-11-25",
+  "last_daily_summary": "2026-11-26",
   "last_entry_close_ts": {},
-  "last_processed_bar_close_ts": 1795636800000,
+  "last_processed_bar_close_ts": 1795651200000,
   "mode": "challenge",
   "open_trades": [],
   "realized_pnl": 0.0,

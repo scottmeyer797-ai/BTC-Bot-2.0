@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-25T21:22:41Z",
+ "generated_at": "2026-11-26T03:54:52Z",
  "preview": false,
  "exchange": {
   "name": "BloFin demo",
@@ -26,8 +26,8 @@
   "consecutive_losses": 0
  },
  "summary": {
-  "last_run": "2026-11-25T21:22:30Z",
-  "last_bar_close": "2026-11-25T20:00:00Z",
+  "last_run": "2026-11-26T03:54:38Z",
+  "last_bar_close": "2026-11-26T00:00:00Z",
   "equity": 100000.0,
   "realized_pnl": 0.0,
   "day_start_equity": {
@@ -35,7 +35,8 @@
    "2026-11-22": 100000.0,
    "2026-11-23": 100000.0,
    "2026-11-24": 100000.0,
-   "2026-11-25": 100000.0
+   "2026-11-25": 100000.0,
+   "2026-11-26": 100000.0
   },
   "closed_trades": 0,
   "open_trades": 0,
@@ -133,6 +134,13 @@
   },
   {
    "t": "2026-11-25T21:22:30Z",
+   "equity": 100000.0,
+   "realized": 0.0,
+   "unrealized": 0,
+   "open": 0
+  },
+  {
+   "t": "2026-11-26T03:54:38Z",
    "equity": 100000.0,
    "realized": 0.0,
    "unrealized": 0,
