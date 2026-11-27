@@ -210,6 +210,17 @@
       "realized": 0.0,
       "time": "2026-11-27T14:38:15Z",
       "unrealized": 0
+    },
+    {
+      "bar_close": "2026-11-27T20:00:00Z",
+      "day_start": 100000.0,
+      "dry_run": false,
+      "equity": 100000.0,
+      "open_risk": 0.0,
+      "open_trades": 0,
+      "realized": 0.0,
+      "time": "2026-11-27T23:10:21Z",
+      "unrealized": 0
     }
   ],
   "failed": false,
@@ -217,7 +228,7 @@
   "failed_reason": null,
   "last_daily_summary": "2026-11-27",
   "last_entry_close_ts": {},
-  "last_processed_bar_close_ts": 1795780800000,
+  "last_processed_bar_close_ts": 1795809600000,
   "mode": "challenge",
   "open_trades": [],
   "realized_pnl": 0.0,
